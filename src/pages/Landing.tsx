@@ -70,8 +70,7 @@ export default function Landing() {
 
           <div className="mt-10 text-xs text-muted-foreground/50 space-y-1">
             <p>
-              Data source: CoinGecko · 90-day rolling window · daily close
-              prices
+              Data source: CoinGecko · configurable window (1d, 7d, 30d, 90d) · daily close prices
             </p>
             <p>
               Assets: BTC, ETH, SOL, XRP, HYPE · 10 pair combinations

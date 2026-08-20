@@ -57,9 +57,17 @@ function formatStat(v: number): string {
 // ---------- Dashboard ----------
 
 export default function Dashboard() {
+  const WINDOWS = [
+  { label: "1d", days: 1 },
+  { label: "7d", days: 7 },
+  { label: "30d", days: 30 },
+  { label: "90d", days: 90 },
+] as const;
+
   const [selected, setSelected] = useState<string[]>(
     ALL_COINS.map((c) => c.id),
   );
+  const [windowDays, setWindowDays] = useState<number>(7);
   const [coinData, setCoinData] = useState<PriceData[]>([]);
   const [regimes, setRegimes] = useState<Record<string, RegimeResult>>({});
   const [pairs, setPairs] = useState<PairResult[]>([]);
@@ -73,6 +81,9 @@ export default function Dashboard() {
     );
   };
 
+  const MIN_HMM = 10;
+  const MIN_ADF = 30;
+
   const runAnalysis = useCallback(async () => {
     if (selected.length === 0) {
       setCoinData([]);
@@ -85,7 +96,7 @@ export default function Dashboard() {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchCoins(selected, 90);
+      const data = await fetchCoins(selected, windowDays);
       if (data.length === 0) throw new Error("No data received from CoinGecko");
       setCoinData(data);
 
@@ -126,7 +137,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [selected]);
+  }, [selected, windowDays]);
 
   useEffect(() => {
     runAnalysis();
@@ -255,6 +266,47 @@ export default function Dashboard() {
           )}
         </div>
 
+        {/* Time Window Selector */}
+        <div className="flex items-center gap-2 mb-8">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mr-1">
+            Window
+          </span>
+          <div className="inline-flex rounded-lg border border-border/40 bg-card/30 overflow-hidden">
+            {WINDOWS.map((w) => (
+              <button
+                key={w.days}
+                onClick={() => setWindowDays(w.days)}
+                className={`px-3 py-1.5 text-xs font-mono font-semibold transition-all border-r border-border/30 last:border-r-0 ${
+                  windowDays === w.days
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                }`}
+              >
+                {w.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] font-mono text-muted-foreground/50">
+            {windowDays}d · ~{windowDays} daily points
+          </span>
+        </div>
+
+        {/* Short window warnings */}
+        {selected.length > 0 && windowDays < 30 && (
+          <div className="mb-6 rounded-lg border border-border/40 bg-card/30 px-4 py-3 text-xs font-mono text-muted-foreground">
+            {windowDays < 10 && (
+              <span className="text-[oklch(0.65_0.2_25)]">
+                HMM requires ≥{MIN_HMM} data points — {windowDays}d window is too short.
+              </span>
+            )}
+            {windowDays >= 10 && windowDays < 30 && (
+              <span className="text-[oklch(0.8_0.15_90)]">
+                HMM will run ({windowDays}d ≥ {MIN_HMM}). ADF requires ≥{MIN_ADF} — results may be limited.
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Empty state */}
         {selected.length === 0 && (
           <div className="text-center py-20 text-sm text-muted-foreground font-mono">
@@ -270,7 +322,7 @@ export default function Dashboard() {
                 HMM Regime Detection
               </h2>
               <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 rounded px-2 py-0.5">
-                3-state HMM · Baum-Welch + Viterbi
+                3-state HMM · Baum-Welch + Viterbi · {windowDays}d window
               </span>
             </div>
 
@@ -341,7 +393,7 @@ export default function Dashboard() {
                           ))}
                         </div>
                         <div className="flex justify-between text-[9px] text-muted-foreground font-mono mb-3">
-                          <span>-30d</span>
+                          <span>-{Math.min(windowDays, 30)}d</span>
                           <span>now</span>
                         </div>
 
@@ -439,7 +491,7 @@ export default function Dashboard() {
                 ADF Cointegration
               </h2>
               <span className="text-[10px] text-muted-foreground font-mono bg-muted/50 rounded px-2 py-0.5">
-                Augmented Dickey-Fuller · MacKinnon CVs
+                Augmented Dickey-Fuller · MacKinnon CVs · {windowDays}d window
               </span>
             </div>
 
@@ -602,7 +654,7 @@ export default function Dashboard() {
         )}
 
         <footer className="border-t border-border/30 pt-6 pb-8 text-center text-[10px] font-mono text-muted-foreground/40">
-          AT v1 · CoinGecko 90d · {ALL_COINS.map((c) => c.symbol).join(" · ")}
+          AT v1 · CoinGecko {windowDays}d · {ALL_COINS.map((c) => c.symbol).join(" · ")}
         </footer>
       </div>
     </main>
