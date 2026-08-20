@@ -11,18 +11,18 @@ export interface Coin {
   name: string;
 }
 
-export const TOP_COINS: Coin[] = [
+export const ALL_COINS: Coin[] = [
   { id: "bitcoin", symbol: "BTC", name: "Bitcoin" },
   { id: "ethereum", symbol: "ETH", name: "Ethereum" },
   { id: "solana", symbol: "SOL", name: "Solana" },
   { id: "ripple", symbol: "XRP", name: "XRP" },
-  { id: "dogecoin", symbol: "DOGE", name: "Dogecoin" },
+  { id: "hyperliquid", symbol: "HYPE", name: "Hyperliquid" },
 ];
 
 export interface PriceData {
   coin: Coin;
-  prices: number[]; // daily close prices
-  dates: string[];  // corresponding dates (YYYY-MM-DD)
+  prices: number[];
+  dates: string[];
 }
 
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
@@ -47,22 +47,23 @@ export async function fetchCoinHistory(
     return d.toISOString().split("T")[0];
   });
 
-  const coin = TOP_COINS.find((c) => c.id === coinId)!;
+  const coin = ALL_COINS.find((c) => c.id === coinId)!;
 
   return { coin, prices, dates };
 }
 
-export async function fetchAllCoins(
+export async function fetchCoins(
+  coinIds: string[],
   days: number = 90,
 ): Promise<PriceData[]> {
   const results: PriceData[] = [];
 
-  for (const coin of TOP_COINS) {
+  for (const coinId of coinIds) {
     try {
-      const data = await fetchCoinHistory(coin.id, days);
+      const data = await fetchCoinHistory(coinId, days);
       results.push(data);
     } catch (err) {
-      console.error(`Failed to fetch ${coin.name}:`, err);
+      console.error(`Failed to fetch ${coinId}:`, err);
     }
   }
 

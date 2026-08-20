@@ -74,7 +74,7 @@ export default function Landing() {
               prices
             </p>
             <p>
-              Assets: BTC, ETH, SOL, XRP, DOGE · 10 pair combinations
+              Assets: BTC, ETH, SOL, XRP, HYPE · 10 pair combinations
             </p>
           </div>
 
