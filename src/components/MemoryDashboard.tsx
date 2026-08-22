@@ -111,15 +111,14 @@ export function MemoryDashboard() {
         </aside>
       </div>
 
-      {showApiModal && (
-        <ApiKeyModal
-          onSetKey={(key) => {
-            setApiKey(key);
-            setShowApiModal(false);
-          }}
-          onClose={() => setShowApiModal(false)}
-        />
-      )}
+      <ApiKeyModal
+        visible={showApiModal}
+        onSetKey={(key) => {
+          setApiKey(key);
+          setShowApiModal(false);
+        }}
+        onClose={() => setShowApiModal(false)}
+      />
     </div>
   );
 }

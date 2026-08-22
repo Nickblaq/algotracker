@@ -1,16 +1,21 @@
 import { useState } from 'react';
 
 interface Props {
+  visible: boolean;
   onSetKey: (key: string) => void;
   onClose: () => void;
 }
 
-export function ApiKeyModal({ onSetKey, onClose }: Props) {
+export function ApiKeyModal({ visible, onSetKey, onClose }: Props) {
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={{ display: visible ? 'flex' : 'none' }}
+    >
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Connect to OpenRouter</h2>
