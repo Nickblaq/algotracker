@@ -8,6 +8,45 @@ interface Props {
   memoriesAccessed: MemoryEntry[];
 }
 
+const SUGGESTED_PROMPTS = [
+  {
+    icon: '📚',
+    label: 'Store a fact',
+    prompt: "The quick brown fox jumps over the lazy dog. This sentence contains all 26 letters of the English alphabet.",
+    description: 'Creates a sensory memory from your input',
+  },
+  {
+    icon: '🔗',
+    label: 'Build associations',
+    prompt: "What are the connections between memory consolidation in the brain and how this app's hierarchical tiers work?",
+    description: 'Links related concepts across memory tiers',
+  },
+  {
+    icon: '🧠',
+    label: 'Test recall',
+    prompt: "What do you remember about transformer attention mechanisms and working memory?",
+    description: 'Retrieves stored memories via similarity search',
+  },
+  {
+    icon: '📖',
+    label: 'Episodic memory',
+    prompt: "Tell me a story about a user who built a knowledge management system. Remember this as an experience.",
+    description: 'Stores a narrative in episodic memory tier',
+  },
+  {
+    icon: '⚡',
+    label: 'Procedural knowledge',
+    prompt: "Explain step by step how to implement a retrieval-augmented generation (RAG) pipeline with vector embeddings.",
+    description: 'Stores procedural (how-to) knowledge',
+  },
+  {
+    icon: '🔄',
+    label: 'Memory evolution',
+    prompt: "Send several messages in a row: ask me about my favorite color, my pet's name, and what I had for breakfast. Then ask what you remember about me.",
+    description: 'Demonstrates decay, consolidation, and tier promotion over time',
+  },
+];
+
 export function MemoryChat({ messages, isProcessing, onSendMessage }: Props) {
   const [input, setInput] = useState('');
   const [lastRetrieved, setLastRetrieved] = useState<MemoryEntry[]>([]);
@@ -44,6 +83,24 @@ export function MemoryChat({ messages, isProcessing, onSendMessage }: Props) {
             <div className="chat-empty-icon">🧠</div>
             <h3>Start a Conversation</h3>
             <p>Type a message to see how the hierarchical memory system captures, stores, and retrieves information across different memory tiers.</p>
+            <div className="suggestion-chips">
+              {SUGGESTED_PROMPTS.map((s) => (
+                <button
+                  key={s.label}
+                  className="suggestion-chip"
+                  onClick={() => {
+                    setInput(s.prompt);
+                  }}
+                  title={s.description}
+                >
+                  <span className="chip-icon">{s.icon}</span>
+                  <span className="chip-text">
+                    <span className="chip-label">{s.label}</span>
+                    <span className="chip-desc">{s.description}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map(msg => (
