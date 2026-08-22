@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMemoryStore } from '../hooks/useMemoryStore';
 import { MemoryTierView } from './MemoryTierView';
 import { MemoryChat } from './MemoryChat';
@@ -8,11 +8,30 @@ import { ApiKeyModal } from './ApiKeyModal';
 import { MemoryToolbar } from './MemoryToolbar';
 import { MemoryMap } from './MemoryMap';
 
+const API_KEY_STORAGE = 'hmm-api-key';
+
 export function MemoryDashboard() {
   const store = useMemoryStore();
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(() => {
+    try {
+      return localStorage.getItem(API_KEY_STORAGE) || '';
+    } catch {
+      return '';
+    }
+  });
   const [showApiModal, setShowApiModal] = useState(true);
   const [activeTab, setActiveTab] = useState<'chat' | 'operations' | 'stats'>('chat');
+
+  // Load saved API key on mount and auto-dismiss modal if key exists
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(API_KEY_STORAGE);
+      if (saved) {
+        setApiKey(saved);
+        setShowApiModal(false);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   return (
     <div className="dashboard">
@@ -115,6 +134,9 @@ export function MemoryDashboard() {
         visible={showApiModal}
         onSetKey={(key) => {
           setApiKey(key);
+          try {
+            localStorage.setItem(API_KEY_STORAGE, key);
+          } catch { /* ignore */ }
           setShowApiModal(false);
         }}
         onClose={() => setShowApiModal(false)}
