@@ -61,31 +61,94 @@ export default function EditorPage() {
   );
 
   // Preserve scroll position when Editor.js inserts blocks
+  // Covers scrollIntoView, window.scrollTo, window.scroll, window.scrollBy,
+  // and direct scrollTop assignments on mobile browsers.
   useEffect(() => {
     if (!containerRef.current) return;
 
     const el = containerRef.current;
-    let savedScroll = 0;
+    let pendingRestore: number | null = null;
 
-    // Intercept scrollIntoView calls from Editor.js internals
+    function captureAndRestore() {
+      const y = window.scrollY;
+      if (pendingRestore !== null) cancelAnimationFrame(pendingRestore);
+      pendingRestore = requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+        pendingRestore = null;
+      });
+    }
+
+    // 1. Patch scrollIntoView
     const origScrollIntoView = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = function (
-      ...args: Parameters<Element["scrollIntoView"]>
-    ) {
-      // Only block scrolls triggered inside the editor holder
+    Element.prototype.scrollIntoView = function (...args) {
       if (el.contains(this)) {
-        savedScroll = window.scrollY;
-        // Restore after browser paints
-        requestAnimationFrame(() => {
-          window.scrollTo({ top: savedScroll, behavior: "auto" });
-        });
+        captureAndRestore();
         return;
       }
       return origScrollIntoView.apply(this, args);
     };
 
+    // 2. Patch window.scrollTo / window.scroll / window.scrollBy
+    const origScrollTo = window.scrollTo;
+    const origScroll = window.scroll;
+    const origScrollBy = window.scrollBy;
+    window.scrollTo = function (...args: Parameters<typeof window.scrollTo>) {
+      captureAndRestore();
+      return origScrollTo.apply(window, args);
+    } as typeof window.scrollTo;
+    window.scroll = window.scrollTo;
+    window.scrollBy = function (...args: Parameters<typeof window.scrollBy>) {
+      captureAndRestore();
+      return origScrollBy.apply(window, args);
+    } as typeof window.scrollBy;
+
+    // 3. Patch documentElement.scrollTop / body.scrollTop via descriptors
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+
+    const origHtmlDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollTop",
+    );
+    const origBodyDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollTop",
+    );
+
+    Object.defineProperty(htmlEl, "scrollTop", {
+      get() {
+        return origHtmlDescriptor?.get?.call(this) ?? 0;
+      },
+      set(v: number) {
+        const prev = origHtmlDescriptor?.get?.call(this) ?? 0;
+        if (prev !== v) captureAndRestore();
+        origHtmlDescriptor?.set?.call(this, v);
+      },
+      configurable: true,
+    });
+
+    if (bodyEl !== htmlEl) {
+      Object.defineProperty(bodyEl, "scrollTop", {
+        get() {
+          return origBodyDescriptor?.get?.call(this) ?? 0;
+        },
+        set(v: number) {
+          const prev = origBodyDescriptor?.get?.call(this) ?? 0;
+          if (prev !== v) captureAndRestore();
+          origBodyDescriptor?.set?.call(this, v);
+        },
+        configurable: true,
+      });
+    }
+
     return () => {
       Element.prototype.scrollIntoView = origScrollIntoView;
+      window.scrollTo = origScrollTo;
+      window.scroll = origScroll;
+      window.scrollBy = origScrollBy;
+      if (origHtmlDescriptor) Object.defineProperty(htmlEl, "scrollTop", origHtmlDescriptor);
+      if (origBodyDescriptor && bodyEl !== htmlEl)
+        Object.defineProperty(bodyEl, "scrollTop", origBodyDescriptor);
     };
   }, []);
 
