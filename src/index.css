@@ -161,3 +161,204 @@
     );
   }
 }
+
+/* Editor.js overrides */
+.ce-block__content,
+.ce-toolbar__content {
+  max-width: 100% !important;
+}
+
+.ce-toolbar {
+  padding: 0 !important;
+}
+
+.codex-editor {
+  min-height: 60vh;
+}
+
+.ce-block {
+  color: oklch(0.93 0 0);
+}
+
+.ce-paragraph {
+  color: oklch(0.93 0 0);
+}
+
+.ce-header {
+  color: oklch(0.93 0 0);
+  font-family: ui-monospace, monospace;
+}
+
+.ce-inline-toolbar {
+  background: oklch(0.14 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  box-shadow: 0 4px 20px oklch(0 0 0 / 0.4) !important;
+}
+
+.ce-inline-tool {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-inline-tool:hover {
+  background: oklch(0.22 0.02 250) !important;
+}
+
+.ce-conversion-toolbar {
+  background: oklch(0.14 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  box-shadow: 0 4px 20px oklch(0 0 0 / 0.4) !important;
+}
+
+.ce-conversion-tool {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-conversion-tool:hover {
+  background: oklch(0.22 0.02 250) !important;
+}
+
+.ce-toolbar__plus,
+.ce-toolbar__settings-btn {
+  color: oklch(0.6 0 0) !important;
+  background: oklch(0.14 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+}
+
+.ce-toolbar__plus:hover,
+.ce-toolbar__settings-btn:hover {
+  color: oklch(0.93 0 0) !important;
+  background: oklch(0.22 0.02 250) !important;
+}
+
+.ce-popover {
+  background: oklch(0.14 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  box-shadow: 0 4px 20px oklch(0 0 0 / 0.4) !important;
+}
+
+.ce-popover-item:hover {
+  background: oklch(0.22 0.02 250) !important;
+}
+
+.ce-popover-item__title {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-popover-item__secondary-title {
+  color: oklch(0.6 0 0) !important;
+}
+
+.ce-popover-item__icon {
+  background: oklch(0.18 0.02 250) !important;
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-popover-item--active {
+  background: oklch(0.18 0.02 250) !important;
+}
+
+.ce-popover-item--active .ce-popover-item__title {
+  color: oklch(0.72 0.19 180) !important;
+}
+
+.ce-popover-item--active .ce-popover-item__icon {
+  background: oklch(0.72 0.19 180 / 0.15) !important;
+  color: oklch(0.72 0.19 180) !important;
+}
+
+.ce-codeblock {
+  background: oklch(0.12 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  border-radius: 8px !important;
+}
+
+.ce-codeblock textarea,
+.ce-code__textarea {
+  color: oklch(0.93 0 0) !important;
+  font-family: ui-monospace, monospace !important;
+}
+
+.ce-table {
+  border-color: oklch(0.22 0.02 250) !important;
+}
+
+.ce-table td,
+.ce-table th {
+  border-color: oklch(0.22 0.02 250) !important;
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-table td {
+  background: oklch(0.12 0.01 250) !important;
+}
+
+.ce-table td:hover {
+  background: oklch(0.16 0.015 250) !important;
+}
+
+.ce-quote {
+  border-left: 3px solid oklch(0.72 0.19 180) !important;
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-quote__text {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-quote__caption {
+  color: oklch(0.6 0 0) !important;
+}
+
+.ce-checklist {
+  list-style: none;
+  padding: 0;
+}
+
+.ce-checklist__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ce-warning {
+  background: oklch(0.18 0.02 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  border-left: 3px solid oklch(0.8 0.15 90) !important;
+}
+
+.ce-inline-code {
+  background: oklch(0.18 0.02 250) !important;
+  color: oklch(0.72 0.19 180) !important;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: ui-monospace, monospace;
+}
+
+.ce-marker {
+  background: oklch(0.8 0.15 90 / 0.2) !important;
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-delimiter::before {
+  background: oklch(0.22 0.02 250) !important;
+}
+
+.cdx-raw-wrapper {
+  background: oklch(0.12 0.01 250) !important;
+  border: 1px solid oklch(0.22 0.02 250) !important;
+  border-radius: 8px !important;
+}
+
+.cdx-raw-wrapper textarea {
+  color: oklch(0.93 0 0) !important;
+  font-family: ui-monospace, monospace !important;
+}
+
+.ce-inline-toolbar .ce-inline-tool--active {
+  background: oklch(0.72 0.19 180 / 0.2) !important;
+  color: oklch(0.72 0.19 180) !important;
+}
+
+.ce-toolbar__settings-btn svg {
+  fill: currentColor !important;
+}
