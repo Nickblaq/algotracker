@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ConversationMessage, MemoryEntry } from '../types';
 
 interface Props {
@@ -51,9 +51,28 @@ export function MemoryChat({ messages, isProcessing, onSendMessage }: Props) {
   const [input, setInput] = useState('');
   const [lastRetrieved, setLastRetrieved] = useState<MemoryEntry[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(messages.length);
+  const userScrolledRef = useRef(false);
 
+  // Detect if user has scrolled up manually
+  const handleScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+    userScrolledRef.current = !isAtBottom;
+  }, []);
+
+  // Only auto-scroll when a NEW message is added and user hasn't scrolled up
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const newMessageCount = messages.length;
+    const prevCount = prevMessageCountRef.current;
+    prevMessageCountRef.current = newMessageCount;
+
+    // Only scroll if a message was actually added (not just a reference refresh)
+    if (newMessageCount > prevCount && !userScrolledRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   const handleSend = async () => {
@@ -77,7 +96,7 @@ export function MemoryChat({ messages, isProcessing, onSendMessage }: Props) {
 
   return (
     <div className="chat-panel">
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
         {messages.length === 0 && (
           <div className="chat-empty">
             <div className="chat-empty-icon">🧠</div>
