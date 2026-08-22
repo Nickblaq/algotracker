@@ -23,6 +23,13 @@ export function MemoryDashboard() {
         </div>
         <div className="header-right">
           <button
+            className="btn btn-ghost btn-sm"
+            onClick={store.clearChat}
+            title="Start a new conversation"
+          >
+            + New Chat
+          </button>
+          <button
             className="btn btn-ghost"
             onClick={() => setShowApiModal(true)}
           >

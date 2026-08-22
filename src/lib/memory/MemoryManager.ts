@@ -440,6 +440,19 @@ export class MemoryManager {
     return this.memories.get(id);
   }
 
+  // --- Conversation Reset ---
+  clearConversation(): void {
+    this.conversationHistory = [];
+    this.logOperation({
+      id: generateId(),
+      type: 'create',
+      sourceTier: 'sensory',
+      memoryId: 'system',
+      timestamp: Date.now(),
+      details: 'Chat session cleared — starting new conversation',
+    });
+  }
+
   // --- Serialization ---
   exportState(): string {
     return JSON.stringify({

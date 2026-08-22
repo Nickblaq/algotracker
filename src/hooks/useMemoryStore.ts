@@ -184,6 +184,11 @@ Use these memories to provide contextual responses. Mention when you recall some
     [refresh]
   );
 
+  const clearChat = useCallback(() => {
+    managerRef.current.clearConversation();
+    refresh();
+  }, [refresh]);
+
   return {
     ...state,
     filteredMemories,
@@ -194,6 +199,7 @@ Use these memories to provide contextual responses. Mention when you recall some
     manualPrune,
     manualConsolidate,
     createManualMemory,
+    clearChat,
     refresh,
   };
 }
