@@ -15,6 +15,7 @@ import Quote from "@editorjs/quote";
 import RawTool from "@editorjs/raw";
 import { MermaidBlock } from "@/lib/blocks/mermaid-block";
 import { LatexBlock } from "@/lib/blocks/latex-block";
+import { MathInlineBlock } from "@/lib/blocks/math-inline-block";
 import { getDocument, updateDocument, createDocument } from "@/lib/db";
 import { ArrowLeft, Save, Check } from "lucide-react";
 
@@ -158,6 +159,10 @@ export default function EditorPage() {
           },
           latex: {
             class: LatexBlock,
+            inlineToolbar: false,
+          },
+          mathInline: {
+            class: MathInlineBlock,
             inlineToolbar: false,
           },
         },
