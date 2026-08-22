@@ -17,7 +17,8 @@ import { MermaidBlock } from "@/lib/blocks/mermaid-block";
 import { LatexBlock } from "@/lib/blocks/latex-block";
 import { MathInlineBlock } from "@/lib/blocks/math-inline-block";
 import { getDocument, updateDocument, createDocument } from "@/lib/db";
-import { ArrowLeft, Save, Check, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Save, Check, Eye, EyeOff, Download } from "lucide-react";
+import html2pdf from "html2pdf.js";
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -312,6 +313,52 @@ export default function EditorPage() {
     }
   };
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPDF = async () => {
+    if (!containerRef.current || exporting) return;
+    setExporting(true);
+    try {
+      // Temporarily enable draft mode to hide inputs during export
+      const wasDraft = draftMode;
+      if (!wasDraft) {
+        containerRef.current.classList.add("draft-mode");
+      }
+
+      // Hide Editor.js UI elements that shouldn't appear in PDF
+      const toolbars = containerRef.current.querySelectorAll(
+        ".ce-toolbar, .ce-inline-toolbar, .ce-conversion-toolbar",
+      );
+      toolbars.forEach((el) => ((el as HTMLElement).style.display = "none"));
+
+      await html2pdf()
+        .set({
+          margin: [0.75, 0.75, 0.75, 0.75],
+          filename: `${title || "document"}.pdf`,
+          image: { type: "jpeg" as const, quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: "oklch(0.1 0.01 250)",
+          },
+          jsPDF: { unit: "in", format: "letter", orientation: "portrait" as const },
+        })
+        .from(containerRef.current)
+        .save();
+
+      // Restore UI
+      toolbars.forEach((el) => ((el as HTMLElement).style.display = ""));
+      if (!wasDraft) {
+        containerRef.current.classList.remove("draft-mode");
+      }
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggleDraftMode = () => {
     const next = !draftMode;
     setDraftMode(next);
@@ -372,6 +419,14 @@ export default function EditorPage() {
             >
               {draftMode ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
               {draftMode ? "Preview" : "Draft"}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-secondary/50 px-3.5 py-1.5 text-xs font-mono text-secondary-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50"
+            >
+              <Download className="size-3" />
+              {exporting ? "Exporting..." : "PDF"}
             </button>
             <button
               onClick={handleManualSave}
