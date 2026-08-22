@@ -60,6 +60,35 @@ export default function EditorPage() {
     [saveDocument],
   );
 
+  // Preserve scroll position when Editor.js inserts blocks
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const el = containerRef.current;
+    let savedScroll = 0;
+
+    // Intercept scrollIntoView calls from Editor.js internals
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (
+      ...args: Parameters<Element["scrollIntoView"]>
+    ) {
+      // Only block scrolls triggered inside the editor holder
+      if (el.contains(this)) {
+        savedScroll = window.scrollY;
+        // Restore after browser paints
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: savedScroll, behavior: "auto" });
+        });
+        return;
+      }
+      return origScrollIntoView.apply(this, args);
+    };
+
+    return () => {
+      Element.prototype.scrollIntoView = origScrollIntoView;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -98,7 +127,7 @@ export default function EditorPage() {
         holder: containerRef.current,
         placeholder: "Start writing something amazing...",
         data: initialData,
-        autofocus: true,
+        autofocus: false,
         tools: {
           header: {
             class: Header,
@@ -176,6 +205,10 @@ export default function EditorPage() {
         },
         onReady: () => {
           setLoading(false);
+          // Apply scroll-behavior to the holder after mount
+          if (containerRef.current) {
+            containerRef.current.style.scrollBehavior = "auto";
+          }
         },
       });
 

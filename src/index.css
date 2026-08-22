@@ -172,8 +172,22 @@
   padding: 0 !important;
 }
 
+.codex-editor,
+.ce-content {
+  scroll-behavior: auto !important;
+}
+
 .codex-editor {
   min-height: 60vh;
+}
+
+/* Prevent Editor.js from scrolling to top on block insertion */
+.ce-block:first-child {
+  scroll-margin-top: 80px;
+}
+
+.ce-block__content {
+  scroll-margin-top: 80px;
 }
 
 .ce-block {
