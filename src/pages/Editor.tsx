@@ -16,6 +16,7 @@ import RawTool from "@editorjs/raw";
 import { MermaidBlock } from "@/lib/blocks/mermaid-block";
 import { LatexBlock } from "@/lib/blocks/latex-block";
 import { MathInlineBlock } from "@/lib/blocks/math-inline-block";
+import { NotebookBlock } from "@/lib/blocks/notebook-block";
 import { getDocument, updateDocument, createDocument } from "@/lib/db";
 import { ArrowLeft, Save, Check, Eye, EyeOff, Download } from "lucide-react";
 import html2pdf from "html2pdf.js";
@@ -257,6 +258,10 @@ export default function EditorPage() {
           },
           mathInline: {
             class: MathInlineBlock,
+            inlineToolbar: false,
+          },
+          notebook: {
+            class: NotebookBlock,
             inlineToolbar: false,
           },
         },
