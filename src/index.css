@@ -230,26 +230,49 @@
   background: oklch(0.22 0.02 250) !important;
 }
 
-.ce-popover {
+/* === Block tools popover (the + menu) === */
+.ce-popover,
+.ce-popover--opened,
+.ce-popover .ce-popover {
+  --bg: oklch(0.14 0.01 250);
+  --border-color: oklch(0.22 0.02 250);
+  --text-color: oklch(0.93 0 0);
+  --hover-bg: oklch(0.22 0.02 250);
   background: oklch(0.14 0.01 250) !important;
-  border: 1px solid oklch(0.22 0.02 250) !important;
-  box-shadow: 0 4px 20px oklch(0 0 0 / 0.4) !important;
+  border-color: oklch(0.22 0.02 250) !important;
+  box-shadow: 0 4px 24px oklch(0 0 0 / 0.5) !important;
 }
 
-.ce-popover-item:hover {
-  background: oklch(0.22 0.02 250) !important;
-}
-
-.ce-popover-item__title {
+.ce-popover-item {
+  background: transparent !important;
   color: oklch(0.93 0 0) !important;
 }
 
-.ce-popover-item__secondary-title {
+.ce-popover-item:hover,
+.ce-popover-item--focused,
+.ce-popover-item--selected {
+  background: oklch(0.22 0.02 250) !important;
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-popover-item__title,
+.ce-popover-item__title span {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-popover-item__secondary-title,
+.ce-popover-item__secondary-title span {
   color: oklch(0.6 0 0) !important;
 }
 
 .ce-popover-item__icon {
   background: oklch(0.18 0.02 250) !important;
+  color: oklch(0.93 0 0) !important;
+  fill: oklch(0.93 0 0) !important;
+}
+
+.ce-popover-item__icon svg {
+  fill: oklch(0.93 0 0) !important;
   color: oklch(0.93 0 0) !important;
 }
 
@@ -257,13 +280,43 @@
   background: oklch(0.18 0.02 250) !important;
 }
 
-.ce-popover-item--active .ce-popover-item__title {
+.ce-popover-item--active .ce-popover-item__title,
+.ce-popover-item--active .ce-popover-item__title span {
   color: oklch(0.72 0.19 180) !important;
 }
 
 .ce-popover-item--active .ce-popover-item__icon {
   background: oklch(0.72 0.19 180 / 0.15) !important;
   color: oklch(0.72 0.19 180) !important;
+  fill: oklch(0.72 0.19 180) !important;
+}
+
+.ce-popover-item--active .ce-popover-item__icon svg {
+  fill: oklch(0.72 0.19 180) !important;
+  color: oklch(0.72 0.19 180) !important;
+}
+
+.ce-popover__search {
+  background: oklch(0.12 0.01 250) !important;
+  border-color: oklch(0.22 0.02 250) !important;
+}
+
+.ce-popover__search input {
+  color: oklch(0.93 0 0) !important;
+}
+
+.ce-popover__search input::placeholder {
+  color: oklch(0.5 0 0) !important;
+}
+
+.ce-popover__search svg,
+.ce-popover__search-icon {
+  color: oklch(0.6 0 0) !important;
+  fill: oklch(0.6 0 0) !important;
+}
+
+.ce-popover__items {
+  background: oklch(0.14 0.01 250) !important;
 }
 
 .ce-codeblock {
