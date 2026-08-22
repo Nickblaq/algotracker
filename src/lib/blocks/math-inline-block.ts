@@ -70,6 +70,7 @@ export class MathInlineBlock {
 
     // Hint
     const hint = document.createElement("div");
+    hint.className = "math-inline-hint";
     hint.style.cssText = `
       font-size: 11px; color: oklch(0.6 0 0); font-family: ui-monospace, monospace;
       margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
@@ -82,6 +83,7 @@ export class MathInlineBlock {
 
     // Textarea
     this.textarea = document.createElement("textarea");
+    this.textarea.className = "math-inline-textarea";
     this.textarea.value = this.data.text;
     this.textarea.placeholder =
       'Type text with inline math...\n\nExample:\nThe famous equation $E = mc^2$ relates mass to energy.\n\nThe quadratic formula is:\n$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$\n\nEuler\'s identity: $e^{i\\pi} + 1 = 0$';

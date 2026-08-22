@@ -421,6 +421,45 @@
   font-family: ui-monospace, monospace !important;
 }
 
+/* === Draft mode: hide block inputs, show only rendered output === */
+/* Custom block inputs */
+.draft-mode .mermaid-textarea,
+.draft-mode .latex-textarea,
+.draft-mode .latex-toggle,
+.draft-mode .math-inline-textarea,
+.draft-mode .math-inline-hint,
+.draft-mode .mermaid-block .mermaid-textarea,
+.draft-mode .latex-block .latex-textarea,
+.draft-mode .latex-block .latex-toggle,
+.draft-mode .math-inline-block .math-inline-textarea,
+.draft-mode .math-inline-block .math-inline-hint {
+  display: none !important;
+}
+
+/* Editor.js built-in block inputs */
+.draft-mode .ce-code__textarea,
+.draft-mode .ce-codeblock textarea,
+.draft-mode .cdx-raw-wrapper textarea,
+.draft-mode .cdx-raw-settings {
+  display: none !important;
+}
+
+/* Preview / output areas remain visible */
+.draft-mode .mermaid-preview,
+.draft-mode .latex-preview,
+.draft-mode .math-inline-preview,
+.draft-mode .cdx-raw-wrapper .cdx-raw-render {
+  display: flex !important;
+  min-height: auto !important;
+  padding: 16px !important;
+}
+
+/* Error messages still visible in draft mode */
+.draft-mode .mermaid-block > div:not(.mermaid-textarea):not(.mermaid-preview),
+.draft-mode .latex-block > div:not(.latex-textarea):not(.latex-preview):not(.latex-toggle) {
+  /* keep error elements */
+}
+
 .ce-inline-toolbar .ce-inline-tool--active {
   background: oklch(0.72 0.19 180 / 0.2) !important;
   color: oklch(0.72 0.19 180) !important;

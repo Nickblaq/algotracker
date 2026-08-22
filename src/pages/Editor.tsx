@@ -17,7 +17,7 @@ import { MermaidBlock } from "@/lib/blocks/mermaid-block";
 import { LatexBlock } from "@/lib/blocks/latex-block";
 import { MathInlineBlock } from "@/lib/blocks/math-inline-block";
 import { getDocument, updateDocument, createDocument } from "@/lib/db";
-import { ArrowLeft, Save, Check } from "lucide-react";
+import { ArrowLeft, Save, Check, Eye, EyeOff } from "lucide-react";
 
 export default function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +29,7 @@ export default function EditorPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
     "idle",
   );
+  const [draftMode, setDraftMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [docId, setDocId] = useState<number | null>(
     id ? parseInt(id, 10) : null,
@@ -311,6 +312,12 @@ export default function EditorPage() {
     }
   };
 
+  const toggleDraftMode = () => {
+    const next = !draftMode;
+    setDraftMode(next);
+    containerRef.current?.classList.toggle("draft-mode", next);
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Ambient glow */}
@@ -336,7 +343,7 @@ export default function EditorPage() {
               placeholder="Untitled"
             />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground">
               {saveStatus === "saving" && (
                 <>
@@ -354,6 +361,18 @@ export default function EditorPage() {
                 <span className="opacity-50">Auto-save on</span>
               )}
             </div>
+            <button
+              onClick={toggleDraftMode}
+              title={draftMode ? "Exit draft mode" : "Draft mode: hide block inputs"}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-mono transition-colors ${
+                draftMode
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-border/50 bg-secondary/50 text-secondary-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              {draftMode ? <Eye className="size-3" /> : <EyeOff className="size-3" />}
+              {draftMode ? "Preview" : "Draft"}
+            </button>
             <button
               onClick={handleManualSave}
               className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-secondary/50 px-3.5 py-1.5 text-xs font-mono text-secondary-foreground transition-colors hover:bg-secondary hover:text-foreground"
