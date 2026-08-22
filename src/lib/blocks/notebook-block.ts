@@ -77,16 +77,20 @@ function parseBlocks(source: string): ParsedBlock[] {
   while (i < lines.length) {
     const line = lines[i];
 
-    // Fenced code block: ```lang ... ```
-    if (line.trimStart().startsWith("```")) {
-      const lang = line.trimStart().slice(3).trim();
+    // Fenced code block: ```lang ... ``` or ~~~~lang ... ~~~~
+    const backtickFence = line.trimStart().startsWith("```");
+    const tildeFence = line.trimStart().startsWith("~~~~");
+    if (backtickFence || tildeFence) {
+      const fenceChar = backtickFence ? "`" : "~";
+      const fenceLen = backtickFence ? 3 : 4;
+      const lang = line.trimStart().slice(fenceLen).trim();
       const codeLines: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].trimStart().startsWith("```")) {
+      while (i < lines.length && !lines[i].trimStart().startsWith(fenceChar.repeat(fenceLen))) {
         codeLines.push(lines[i]);
         i++;
       }
-      i++; // skip closing ```
+      i++; // skip closing fence
       const code = codeLines.join("\n");
       blocks.push({
         type: "code",
