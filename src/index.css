@@ -447,11 +447,16 @@
 /* Preview / output areas remain visible */
 .draft-mode .mermaid-preview,
 .draft-mode .latex-preview,
-.draft-mode .math-inline-preview,
 .draft-mode .cdx-raw-wrapper .cdx-raw-render {
   display: flex !important;
   min-height: auto !important;
   padding: 16px !important;
+}
+
+.draft-mode .math-inline-preview {
+  display: block !important;
+  min-height: auto !important;
+  padding: 16px 20px !important;
 }
 
 /* Error messages still visible in draft mode */
