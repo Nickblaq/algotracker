@@ -110,7 +110,7 @@ Use these memories to provide contextual responses. Mention when you recall some
             'HTTP-Referer': window.location.origin,
           },
           body: JSON.stringify({
-            model: 'mistralai/mistral-7b-instruct:free',
+            model: 'openrouter/free',
             messages: [
               { role: 'system', content: systemPrompt },
               ...chatMessages,
