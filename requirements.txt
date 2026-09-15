@@ -1,12 +1,6 @@
 fastapi
 uvicorn[standard]
-yt-dlp[default]
 pydantic
-httpx
-asyncpg
-sqlalchemy
-aiosqlite
-python-dotenv
 sentence-transformers
 chromadb 
 numpy
