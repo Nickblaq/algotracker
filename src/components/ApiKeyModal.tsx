@@ -10,16 +10,14 @@ export function ApiKeyModal({ visible, onSetKey, onClose }: Props) {
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
 
+  if (!visible) return null;
+
   return (
-    <div
-      className="modal-overlay"
-      onClick={onClose}
-      style={{ display: visible ? 'flex' : 'none' }}
-    >
+    <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Connect to OpenRouter</h2>
-          <button className="btn btn-ghost modal-close" onClick={onClose}>×</button>
+          <button className="btn btn-ghost btn-icon modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
           <p className="modal-desc">
@@ -43,7 +41,7 @@ export function ApiKeyModal({ visible, onSetKey, onClose }: Props) {
           </div>
         </div>
         <div className="modal-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Skip for now</button>
+          <button className="btn btn-ghost" onClick={onClose}>Skip</button>
           <button
             className="btn btn-primary"
             onClick={() => onSetKey(key)}

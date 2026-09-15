@@ -29,9 +29,9 @@ export function MemoryToolbar({ searchQuery, onSearchChange, onPrune, onConsolid
     <div className="memory-toolbar">
       <div className="toolbar-row">
         <div className="search-box">
-          <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
           <input
             type="text"
@@ -42,14 +42,14 @@ export function MemoryToolbar({ searchQuery, onSearchChange, onPrune, onConsolid
           />
         </div>
         <div className="toolbar-actions">
-          <button className="btn btn-sm btn-ghost" onClick={onConsolidate} title="Trigger consolidation">
+          <button className="btn btn-ghost btn-sm" onClick={onConsolidate} title="Trigger consolidation">
             ↑ Consolidate
           </button>
-          <button className="btn btn-sm btn-ghost" onClick={onPrune} title="Prune low-importance memories">
+          <button className="btn btn-ghost btn-sm" onClick={onPrune} title="Prune low-importance memories">
             ✂ Prune
           </button>
-          <button className="btn btn-sm btn-primary" onClick={() => setShowCreate(!showCreate)}>
-            {showCreate ? '× Cancel' : '+ New Memory'}
+          <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(!showCreate)}>
+            {showCreate ? '✕ Cancel' : '+ Memory'}
           </button>
         </div>
       </div>
@@ -60,7 +60,7 @@ export function MemoryToolbar({ searchQuery, onSearchChange, onPrune, onConsolid
             value={newContent}
             onChange={e => setNewContent(e.target.value)}
             placeholder="Enter memory content..."
-            className="input create-input"
+            className="input"
             rows={2}
           />
           <div className="create-controls">
@@ -68,6 +68,7 @@ export function MemoryToolbar({ searchQuery, onSearchChange, onPrune, onConsolid
               value={newTier}
               onChange={e => setNewTier(e.target.value as MemoryTier)}
               className="select"
+              style={{ width: 'auto', minWidth: 100 }}
             >
               {TIER_OPTIONS.map(t => (
                 <option key={t} value={t}>{t.replace('_', ' ')}</option>

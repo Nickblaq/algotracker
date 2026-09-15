@@ -15,10 +15,10 @@ interface Node {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  sensory: '#FF6B35',
-  short_term: '#F7C948',
-  long_term: '#4ECDC4',
-  episodic: '#A855F7',
+  sensory: '#F97316',
+  short_term: '#EAB308',
+  long_term: '#0EA5E9',
+  episodic: '#8B5CF6',
   procedural: '#EC4899',
 };
 
@@ -26,7 +26,7 @@ export function MemoryMap({ memories }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const nodes = useMemo(() => {
-    const center = { x: 200, y: 180 };
+    const center = { x: 180, y: 160 };
     const tierGroups: Record<string, MemoryEntry[]> = {};
 
     memories.slice(0, 60).forEach(m => {
@@ -46,7 +46,7 @@ export function MemoryMap({ memories }: Props) {
     Object.entries(tierGroups).forEach(([tier, mems]) => {
       const baseAngle = tierAngles[tier] || 0;
       mems.forEach((mem, i) => {
-        const radius = 60 + (i * 18) + Math.random() * 10;
+        const radius = 50 + (i * 16) + Math.random() * 8;
         const angle = baseAngle + (i * 0.15);
         result.push({
           id: mem.id,
@@ -85,26 +85,28 @@ export function MemoryMap({ memories }: Props) {
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = 400 * dpr;
-    canvas.height = 360 * dpr;
+    const w = 360;
+    const h = 320;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.clearRect(0, 0, 400, 360);
+    ctx.clearRect(0, 0, w, h);
 
     // Draw edges
     edges.forEach(({ from, to }) => {
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
-      ctx.strokeStyle = 'rgba(100, 116, 139, 0.15)';
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
       ctx.lineWidth = 1;
       ctx.stroke();
     });
 
     // Draw nodes
     nodes.forEach(node => {
-      const radius = 3 + node.importance * 5;
-      const color = TIER_COLORS[node.tier] || '#888';
+      const radius = 2 + node.importance * 4;
+      const color = TIER_COLORS[node.tier] || '#94A3B8';
 
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
@@ -116,17 +118,17 @@ export function MemoryMap({ memories }: Props) {
 
     // Draw center
     ctx.beginPath();
-    ctx.arc(200, 180, 20, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+    ctx.arc(180, 160, 16, 0, Math.PI * 2);
+    ctx.fillStyle = '#E2E8F0';
     ctx.fill();
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.3)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#CBD5E1';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '10px system-ui';
+    ctx.fillStyle = '#64748B';
+    ctx.font = '10px -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CORE', 200, 183);
+    ctx.fillText('CORE', 180, 163);
   }, [nodes, edges]);
 
   return (
@@ -138,7 +140,7 @@ export function MemoryMap({ memories }: Props) {
       <canvas
         ref={canvasRef}
         className="map-canvas"
-        style={{ width: 400, height: 360 }}
+        style={{ width: 360, height: 320 }}
       />
       <div className="map-legend">
         {Object.entries(TIER_COLORS).map(([tier, color]) => (

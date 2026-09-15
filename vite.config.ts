@@ -96,5 +96,12 @@ export default defineConfig({
     hmr: {
       overlay: false,
     },
+    // Proxy /api/* requests to the Python FastAPI backend
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
   },
 });

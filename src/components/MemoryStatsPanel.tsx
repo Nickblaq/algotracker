@@ -9,12 +9,16 @@ interface Props {
 export function MemoryStatsPanel({ stats, memories }: Props) {
   const tierData = useMemo(() => {
     const tiers = ['sensory', 'short_term', 'long_term', 'episodic', 'procedural'] as const;
+    const tierMax: Record<string, number> = {
+      sensory: 50, short_term: 30, long_term: 100, episodic: 60, procedural: 40,
+    };
     return tiers.map(t => ({
       tier: t,
-      label: t.replace('_', '-'),
-      count: stats.tierCounts[t],
-      max: t === 'long_term' ? 100 : t === 'sensory' ? 50 : t === 'episodic' ? 60 : 30,
-      avgImportance: memories.filter(m => m.tier === t).reduce((sum, m) => sum + m.importance, 0) / (stats.tierCounts[t] || 1),
+      label: t.replace('_', ' '),
+      count: stats.tierCounts[t as keyof typeof stats.tierCounts],
+      max: tierMax[t],
+      avgImportance: memories.filter(m => m.tier === t).reduce((sum, m) => sum + m.importance, 0) /
+        (stats.tierCounts[t as keyof typeof stats.tierCounts] || 1),
     }));
   }, [stats, memories]);
 
@@ -24,37 +28,43 @@ export function MemoryStatsPanel({ stats, memories }: Props) {
       time: now - (11 - i) * 60000,
       count: 0,
     }));
-
     memories.forEach(m => {
       const bucketIdx = Math.floor((now - m.createdAt) / 60000);
       if (bucketIdx < 12) {
         buckets[11 - bucketIdx].count++;
       }
     });
-
     return buckets;
   }, [memories]);
 
   const maxActivity = Math.max(...recentActivity.map(b => b.count), 1);
 
+  const tierColors: Record<string, string> = {
+    sensory: '#F97316',
+    short_term: '#EAB308',
+    long_term: '#0EA5E9',
+    episodic: '#8B5CF6',
+    procedural: '#EC4899',
+  };
+
   return (
     <div className="stats-panel">
       <div className="stats-grid">
         <div className="stat-card">
-          <span className="stat-label">Total Memories</span>
+          <span className="stat-label">Total</span>
           <span className="stat-value">{stats.totalMemories}</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Avg Importance</span>
-          <span className="stat-value">{(stats.avgImportance * 100).toFixed(1)}%</span>
+          <span className="stat-label">Importance</span>
+          <span className="stat-value">{(stats.avgImportance * 100).toFixed(0)}%</span>
         </div>
         <div className="stat-card">
-          <span className="stat-label">Consolidation Rate</span>
-          <span className="stat-value">{(stats.consolidationRate * 100).toFixed(1)}%</span>
+          <span className="stat-label">Consolidation</span>
+          <span className="stat-value">{(stats.consolidationRate * 100).toFixed(0)}%</span>
         </div>
         <div className="stat-card">
           <span className="stat-label">Utilization</span>
-          <span className="stat-value">{(stats.memoryUtilization * 100).toFixed(1)}%</span>
+          <span className="stat-value">{(stats.memoryUtilization * 100).toFixed(0)}%</span>
         </div>
       </div>
 
@@ -68,8 +78,8 @@ export function MemoryStatsPanel({ stats, memories }: Props) {
                 <div
                   className="tier-bar-fill"
                   style={{
-                    width: `${(t.count / t.max) * 100}%`,
-                    backgroundColor: `var(--${t.tier.replace('_', '-')})`,
+                    width: `${Math.min(100, (t.count / t.max) * 100)}%`,
+                    backgroundColor: tierColors[t.tier],
                   }}
                 />
               </div>
@@ -104,9 +114,12 @@ export function MemoryStatsPanel({ stats, memories }: Props) {
             const low = i / 10;
             const high = (i + 1) / 10;
             const count = memories.filter(m => m.importance >= low && m.importance < high).length;
-            const maxCount = Math.max(...Array.from({ length: 10 }, (_, j) =>
-              memories.filter(m => m.importance >= j / 10 && m.importance < (j + 1) / 10).length
-            ), 1);
+            const maxCount = Math.max(
+              ...Array.from({ length: 10 }, (_, j) =>
+                memories.filter(m => m.importance >= j / 10 && m.importance < (j + 1) / 10).length,
+              ),
+              1,
+            );
             return (
               <div key={i} className="importance-bar-col">
                 <div

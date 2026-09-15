@@ -16,9 +16,17 @@ export interface MemoryEntry {
   consolidated: boolean;
 }
 
+export interface TierCounts {
+  sensory: number;
+  short_term: number;
+  long_term: number;
+  episodic: number;
+  procedural: number;
+}
+
 export interface MemoryStats {
   totalMemories: number;
-  tierCounts: Record<MemoryTier, number>;
+  tierCounts: TierCounts;
   avgImportance: number;
   consolidationRate: number;
   retrievalAccuracy: number;
@@ -38,7 +46,7 @@ export interface MemoryOperation {
   id: string;
   type: 'create' | 'consolidate' | 'decay' | 'retrieve' | 'associate' | 'prune';
   sourceTier: MemoryTier;
-  targetTier?: MemoryTier;
+  targetTier?: MemoryTier | null;
   memoryId: string;
   timestamp: number;
   details: string;

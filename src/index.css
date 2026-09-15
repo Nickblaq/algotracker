@@ -27,28 +27,28 @@
 
 :root {
   --radius: 0.625rem;
-  --background: #0A0E17;
-  --foreground: #E2E8F0;
-  --card: #151C2C;
-  --card-foreground: #E2E8F0;
-  --primary: #4ECDC4;
-  --primary-foreground: #0A0E17;
-  --secondary: #1C2537;
-  --secondary-foreground: #E2E8F0;
-  --muted: #1C2537;
-  --muted-foreground: #8892A6;
-  --accent: #243049;
-  --accent-foreground: #E2E8F0;
-  --destructive: #EF4444;
-  --border: #2A3650;
-  --input: #1C2537;
-  --ring: #4ECDC4;
+  --background: #F8FAFC;
+  --foreground: #1E293B;
+  --card: #FFFFFF;
+  --card-foreground: #1E293B;
+  --primary: #2563EB;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #475569;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #EFF6FF;
+  --accent-foreground: #1E40AF;
+  --destructive: #DC2626;
+  --border: #E2E8F0;
+  --input: #F1F5F9;
+  --ring: #2563EB;
 }
 
 body {
-  background: #0A0E17;
-  color: #E2E8F0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
 }
 
 * {
