@@ -13,7 +13,7 @@
       ],
       "commands": [
         "npm install",
-        "pip install -r requirements.txt --target ./python-modules"
+        "pip install -r requirements.txt"
       ]
     },
     "build": {
