@@ -23,7 +23,6 @@
     }
   },
   "deploy": {
-    "startCommand": "bash start.sh",
-    "aptPackages": ["ffmpeg"]
+    "startCommand": "bash start.sh"
   }
 }
