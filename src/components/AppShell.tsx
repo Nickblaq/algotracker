@@ -54,11 +54,19 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="nav-actions">
             <div
               className={`status-badge ${
-                store.apiConnected ? 'status-connected' : 'status-disconnected'
+                store.apiConnected === null
+                  ? 'status-pending'
+                  : store.apiConnected
+                    ? 'status-connected'
+                    : 'status-disconnected'
               }`}
             >
               <span className="status-dot" />
-              {store.apiConnected ? 'Connected' : 'Offline'}
+              {store.apiConnected === null
+                ? 'Connecting'
+                : store.apiConnected
+                  ? 'Connected'
+                  : 'Offline'}
             </div>
           </div>
         </header>

@@ -1731,6 +1731,16 @@ textarea.input {
   background: var(--success);
 }
 
+.status-pending {
+  background: var(--secondary);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
+.status-pending .status-dot {
+  background: var(--text-muted);
+}
+
 .status-disconnected {
   background: var(--danger-light);
   color: var(--danger);

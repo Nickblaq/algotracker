@@ -70,29 +70,41 @@ export function useMemoryStore() {
 
   // --- Connection check + initial load ---------------------------------------
 
+  const connected = apiConnected === true;
+
+  // Probe the backend once on mount, then keep probing every 5 seconds while
+  // disconnected. Without this, one failed request (a dev server restart, a
+  // dropped network) would pin the indicator to Offline until a reload.
   useEffect(() => {
-    let mounted = true;
-    (async () => {
+    if (connected) return;
+
+    let cancelled = false;
+
+    const probe = async () => {
       try {
         await api.health();
-        if (!mounted) return;
+        if (cancelled) return;
         setApiConnected(true);
         await refresh();
       } catch {
-        if (mounted) setApiConnected(false);
+        if (!cancelled) setApiConnected(false);
       }
-    })();
-    return () => {
-      mounted = false;
     };
-  }, [refresh]);
+
+    void probe();
+    const interval = setInterval(probe, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [connected, refresh]);
 
   // Memories are the only thing that changes behind our back, so poll them.
   useEffect(() => {
-    if (!apiConnected) return;
+    if (!connected) return;
     const interval = setInterval(refreshMemories, 5000);
     return () => clearInterval(interval);
-  }, [apiConnected, refreshMemories]);
+  }, [connected, refreshMemories]);
 
   // --- Chat ------------------------------------------------------------------
 
