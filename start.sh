@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+PYTHON=/mise/installs/python/3.13.16/bin/python3
+
 echo "Starting Next.js on port 3000..."
 npm run start &
 NEXT_PID=$!
@@ -15,7 +17,7 @@ else
 fi
 
 echo "Starting Python FastAPI backend on port 8000..."
-python3 -m uvicorn server.main:app --host 0.0.0.0 --port 8000 &
+$PYTHON -m uvicorn server.main:app --host 0.0.0.0 --port 8000 &
 BACKEND_PID=$!
 
 sleep 2
