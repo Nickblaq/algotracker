@@ -13,7 +13,7 @@
       ],
       "commands": [
         "npm install",
-        "pip install -r requirements.txt"
+        "pip install -r requirements.txt --target ./python-modules"
       ]
     },
     "build": {
@@ -23,7 +23,7 @@
     }
   },
   "deploy": {
-    "startCommand": "npm run start",
+    "startCommand": "bash start.sh",
     "aptPackages": ["ffmpeg"]
   }
 }
