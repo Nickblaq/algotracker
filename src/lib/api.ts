@@ -8,10 +8,8 @@
 
 import type { ConversationMessage, MemoryEntry, MemoryTier } from '../types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '';
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

@@ -5,9 +5,8 @@ Provides the engine, session factory, and base model.
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
-import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./hmm_data.db")
+DATABASE_URL = "sqlite+aiosqlite:///./hmm_data.db"
 
 
 class Base(DeclarativeBase):

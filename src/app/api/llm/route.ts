@@ -1,19 +1,22 @@
 import { NextResponse } from 'next/server';
 
+/**
+ * OpenRouter credentials for the assistant replies.
+ *
+ * This module is server-only, so the key never reaches the browser bundle.
+ * It is the single place in the app that talks to the model provider.
+ */
+const OPENROUTER_API_KEY = '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';
+const OPENROUTER_MODEL = 'openrouter/free';
+
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
 interface LlmRequestBody {
   system: string;
   messages: Array<{ role: string; content: string }>;
 }
 
 export async function POST(req: Request) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'OPENROUTER_API_KEY is not set on the server' },
-      { status: 500 },
-    );
-  }
-
   let body: LlmRequestBody;
   try {
     body = (await req.json()) as LlmRequestBody;
@@ -21,14 +24,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const res = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL ?? 'openrouter/free',
+      model: OPENROUTER_MODEL,
       messages: [
         { role: 'system', content: body.system },
         ...(body.messages ?? []),

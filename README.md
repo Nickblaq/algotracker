@@ -43,16 +43,16 @@ npm run dev                                            # http://localhost:3000
 python3 -m uvicorn server.main:app --port 8000
 ```
 
-## Environment
+## Configuration
 
-Copy `.env.example` to `.env.local` and fill in the key:
+There are no environment variables. The two settings live as constants at the
+top of the file that uses them:
 
-- `PYTHON_API_URL` — where FastAPI runs, defaults to `http://127.0.0.1:8000`
-- `OPENROUTER_API_KEY` — server-only, used by `src/app/api/llm/route.ts`
-- `OPENROUTER_MODEL` — defaults to `openrouter/free`
+- `PYTHON_API` in `next.config.ts` — where FastAPI runs
+- `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` in `src/app/api/llm/route.ts`
 
-The key is never bundled into the browser. If it is unset, chat still stores
-messages and memories; only the assistant reply fails.
+The model key is only read by that route handler, which runs on the server, so
+it is never bundled into the browser.
 
 ## Endpoints
 
