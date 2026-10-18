@@ -1,14 +1,12 @@
-import { useState } from 'react';
-import { MemoryEntry, MemoryTier, MemoryStats } from '../types';
+import { useState, type CSSProperties } from 'react';
+import type { MemoryEntry, MemoryTier, MemoryStats } from '@/types';
 
 interface Props {
   memories: MemoryEntry[];
   stats: MemoryStats;
   selectedTier: MemoryTier | 'all';
   onSelectTier: (tier: MemoryTier | 'all') => void;
-  onAssociate: (a: string, b: string) => void;
   onCreateMemory: (content: string, tier: MemoryTier, importance: number, tags: string[]) => void;
-  refresh: () => void;
 }
 
 const TIER_COLORS: Record<MemoryTier, string> = {
@@ -140,7 +138,7 @@ export function MemoryTierView({ memories, stats, selectedTier, onSelectTier, on
             <div
               key={tier}
               className="tier-card"
-              style={{ '--tier-color': TIER_COLORS[tier], '--tier-bg': TIER_BG[tier] } as React.CSSProperties}
+              style={{ '--tier-color': TIER_COLORS[tier], '--tier-bg': TIER_BG[tier] } as CSSProperties}
             >
               <button
                 className="tier-card-header"

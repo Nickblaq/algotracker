@@ -1,8 +1,7 @@
 """
 Core memory management engine.
 
-Ports the TypeScript MemoryManager logic and adds:
-  - TF-IDF vector embeddings via scikit-learn (replaces basic word-overlap)
+  - TF-IDF vector embeddings via scikit-learn
   - Async SQLAlchemy persistence
   - Numpy-accelerated similarity scoring
   - Server-side decay and consolidation
@@ -23,11 +22,10 @@ import uuid
 from datetime import datetime, timezone
 
 import numpy as np
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from .models import Memory, MemoryAssociation, Operation, ConversationMessage
+from .models import ConversationMessage, Memory
 
 
 def _uid() -> str:
@@ -60,7 +58,6 @@ class _TfidfEncoder:
         self._vectorizer = None
 
     def _ensure_fitted(self, corpus: list[str]) -> None:
-        """(Re-)fit the vectorizer if the corpus changed."""
         from sklearn.feature_extraction.text import TfidfVectorizer
 
         self._vectorizer = TfidfVectorizer(
@@ -96,41 +93,12 @@ class MemoryManager:
     # --- helpers --------------------------------------------------------------
 
     async def _get_all_memories(self) -> list[Memory]:
-        result = await self.session.execute(
-            select(Memory).options(
-                selectinload(Memory.associated_from),
-                selectinload(Memory.associated_to),
-            )
-        )
+        result = await self.session.execute(select(Memory))
         return list(result.scalars().all())
 
     async def _get_memory_by_uid(self, uid: str) -> Memory | None:
-        result = await self.session.execute(
-            select(Memory).where(Memory.uid == uid).options(
-                selectinload(Memory.associated_from),
-                selectinload(Memory.associated_to),
-            )
-        )
+        result = await self.session.execute(select(Memory).where(Memory.uid == uid))
         return result.scalar_one_or_none()
-
-    async def _log_operation(
-        self,
-        op_type: str,
-        source_tier: str,
-        memory_uid: str,
-        details: str,
-        target_tier: str | None = None,
-    ) -> None:
-        op = Operation(
-            uid=_uid(),
-            op_type=op_type,
-            source_tier=source_tier,
-            target_tier=target_tier,
-            memory_uid=memory_uid,
-            timestamp=_utcnow(),
-            details=details,
-        )
-        self.session.add(op)
 
     # --- text similarity via TF-IDF ------------------------------------------
 
@@ -187,9 +155,8 @@ class MemoryManager:
         corpus = [m.content for m in all_mems]
         emb = self._compute_embeddings([content], corpus)
         if emb:
-            mem.embedding_json = json.dumps(emb[0].tolist() if hasattr(emb[0], 'tolist') else list(emb[0]))
+            mem.embedding = emb[0]
 
-        await self._log_operation("create", tier, mem.uid, f'Created memory in {tier}: "{content[:50]}..." (importance: {importance:.2f})')
         await self.session.flush()
         return mem
 
@@ -197,37 +164,16 @@ class MemoryManager:
         return await self._get_memory_by_uid(uid)
 
     async def list_memories(self, tier: str | None = None) -> list[Memory]:
-        q = select(Memory).options(
-            selectinload(Memory.associated_from),
-            selectinload(Memory.associated_to),
-        )
+        q = select(Memory)
         if tier:
             q = q.where(Memory.tier == tier)
         result = await self.session.execute(q)
         return list(result.scalars().all())
 
-    async def update_memory(self, uid: str, **kwargs) -> Memory | None:
-        mem = await self._get_memory_by_uid(uid)
-        if mem is None:
-            return None
-        for key, value in kwargs.items():
-            if value is not None and hasattr(mem, key):
-                setattr(mem, key, value)
-        await self.session.flush()
-        return mem
-
     async def delete_memory(self, uid: str) -> bool:
         mem = await self._get_memory_by_uid(uid)
         if mem is None:
             return False
-        # Remove associations
-        await self.session.execute(
-            select(MemoryAssociation).where(
-                (MemoryAssociation.from_id == mem.id) | (MemoryAssociation.to_id == mem.id)
-            )
-        )
-        for assoc in list(mem.associated_from) + list(mem.associated_to):
-            await self.session.delete(assoc)
         await self.session.delete(mem)
         await self.session.flush()
         return True
@@ -264,13 +210,6 @@ class MemoryManager:
             mem.access_count += 1
             mem.last_accessed = _utcnow()
 
-        if retrieved:
-            await self._log_operation(
-                "retrieve",
-                retrieved[0].tier,
-                retrieved[0].uid,
-                f'Retrieved {len(retrieved)} memories for query: "{query[:40]}"',
-            )
         await self.session.flush()
         return retrieved
 
@@ -278,10 +217,7 @@ class MemoryManager:
 
     async def search_memories(self, query: str, tier: str | None = None) -> list[Memory]:
         """Simple text search across memory content and tags."""
-        q = select(Memory).options(
-            selectinload(Memory.associated_from),
-            selectinload(Memory.associated_to),
-        )
+        q = select(Memory)
         if tier:
             q = q.where(Memory.tier == tier)
         result = await self.session.execute(q)
@@ -297,38 +233,6 @@ class MemoryManager:
 
         results.sort(key=lambda m: m.importance, reverse=True)
         return results
-
-    # --- Association ---------------------------------------------------------
-
-    async def associate_memories(self, uid_a: str, uid_b: str) -> bool:
-        mem_a = await self._get_memory_by_uid(uid_a)
-        mem_b = await self._get_memory_by_uid(uid_b)
-        if not mem_a or not mem_b:
-            return False
-
-        # Check if already associated
-        existing = await self.session.execute(
-            select(MemoryAssociation).where(
-                ((MemoryAssociation.from_id == mem_a.id) & (MemoryAssociation.to_id == mem_b.id))
-                | ((MemoryAssociation.from_id == mem_b.id) & (MemoryAssociation.to_id == mem_a.id))
-            )
-        )
-        if existing.scalar_one_or_none():
-            return False
-
-        assoc = MemoryAssociation(from_id=mem_a.id, to_id=mem_b.id)
-        self.session.add(assoc)
-        mem_a.importance = min(1.0, mem_a.importance + 0.1)
-        mem_b.importance = min(1.0, mem_b.importance + 0.1)
-
-        await self._log_operation(
-            "associate",
-            mem_a.tier,
-            mem_a.uid,
-            f'Associated memories: "{mem_a.content[:30]}" <-> "{mem_b.content[:30]}"',
-        )
-        await self.session.flush()
-        return True
 
     # --- Decay ---------------------------------------------------------------
 
@@ -350,8 +254,6 @@ class MemoryManager:
                 await self.session.delete(mem)
                 deleted += 1
 
-        if deleted > 0:
-            await self._log_operation("decay", "sensory", "system", f"Decayed {deleted} low-importance sensory memories")
         await self.session.flush()
         return deleted
 
@@ -374,14 +276,6 @@ class MemoryManager:
                     mem.decay_rate = TIER_CONFIG[next_tier]["decay_base"]
                     consolidated += 1
 
-                    await self._log_operation(
-                        "consolidate",
-                        tier,
-                        mem.uid,
-                        f'Consolidated "{mem.content[:40]}..." from {tier} to {next_tier}',
-                        target_tier=next_tier,
-                    )
-
         await self.session.flush()
         return consolidated
 
@@ -397,35 +291,8 @@ class MemoryManager:
                 await self.session.delete(mem)
                 pruned += 1
 
-        if pruned > 0:
-            await self._log_operation("prune", "sensory", "system", f"Pruned {pruned} unused low-importance memories")
         await self.session.flush()
         return pruned
-
-    # --- Stats ---------------------------------------------------------------
-
-    async def get_stats(self) -> dict:
-        all_mems = await self._get_all_memories()
-        total = len(all_mems)
-
-        tier_counts = {t: 0 for t in TIER_ORDER}
-        total_importance = 0.0
-        consolidated_count = 0
-
-        for mem in all_mems:
-            tier_counts[mem.tier] = tier_counts.get(mem.tier, 0) + 1
-            total_importance += mem.importance
-            if mem.consolidated:
-                consolidated_count += 1
-
-        return {
-            "totalMemories": total,
-            "tierCounts": tier_counts,
-            "avgImportance": round(total_importance / total, 4) if total else 0,
-            "consolidationRate": round(consolidated_count / total, 4) if total else 0,
-            "retrievalAccuracy": round(0.85 + (total % 10) * 0.01, 4),
-            "memoryUtilization": round(min(1.0, total / 280), 4),
-        }
 
     # --- Chat integration ----------------------------------------------------
 
@@ -435,7 +302,7 @@ class MemoryManager:
         memories_created: list[str] = []
 
         # Extract key sentences and create sensory memories
-        sentences = re.split(r'[.!?]+', content)
+        sentences = re.split(r"[.!?]+", content)
         key_phrases = [s.strip() for s in sentences if len(s.strip()) > 10][:3]
 
         for phrase in key_phrases:
@@ -460,8 +327,8 @@ class MemoryManager:
             role="user",
             content=content,
             timestamp=_utcnow(),
-            memories_accessed_json=str([m.uid for m in memories_retrieved]),
-            memories_created_json=str(memories_created),
+            memories_accessed_json=json.dumps([m.uid for m in memories_retrieved]),
+            memories_created_json=json.dumps(memories_created),
         )
         self.session.add(user_msg)
         await self.session.flush()
@@ -476,12 +343,12 @@ class MemoryManager:
         memories_created.append(mem.uid)
 
         # Check for procedural patterns
-        if re.search(r'\b(how to|steps|process|method|technique)\b', content, re.IGNORECASE):
+        if re.search(r"\b(how to|steps|process|method|technique)\b", content, re.IGNORECASE):
             proc = await self.create_memory(content, "procedural", 0.7, ["procedural-knowledge"])
             memories_created.append(proc.uid)
 
         # Check for episodic markers
-        if re.search(r'\b(experience|happened|event|story|when)\b', content, re.IGNORECASE):
+        if re.search(r"\b(experience|happened|event|story|when)\b", content, re.IGNORECASE):
             epi = await self.create_memory(content, "episodic", 0.65, ["episodic-memory"])
             memories_created.append(epi.uid)
 
@@ -492,7 +359,7 @@ class MemoryManager:
             content=content,
             timestamp=_utcnow(),
             memories_accessed_json="[]",
-            memories_created_json=str(memories_created),
+            memories_created_json=json.dumps(memories_created),
         )
         self.session.add(msg)
         await self.session.flush()
@@ -509,29 +376,6 @@ class MemoryManager:
         msgs.reverse()
         return msgs
 
-    async def list_sessions(self) -> list[dict]:
-        """Return unique sessions with title and message count."""
-        result = await self.session.execute(
-            select(
-                ConversationMessage.session_id,
-                ConversationMessage.title,
-                func.count(ConversationMessage.id).label("msg_count"),
-                func.max(ConversationMessage.timestamp).label("last_at"),
-            )
-            .group_by(ConversationMessage.session_id, ConversationMessage.title)
-            .order_by(func.max(ConversationMessage.timestamp).desc())
-        )
-        rows = result.all()
-        return [
-            {
-                "id": row.session_id,
-                "title": row.title or "Untitled chat",
-                "messageCount": row.msg_count,
-                "lastMessageAt": int(row.last_at.timestamp() * 1000) if row.last_at else 0,
-            }
-            for row in rows
-        ]
-
     async def clear_conversation(self, session_id: str = "default") -> None:
         """Delete all messages in a specific session."""
         result = await self.session.execute(
@@ -539,14 +383,7 @@ class MemoryManager:
         )
         for msg in result.scalars().all():
             await self.session.delete(msg)
-        await self._log_operation("create", "sensory", "system", f"Chat session {session_id} cleared")
         await self.session.flush()
-
-    async def get_operations(self, limit: int = 100) -> list[Operation]:
-        result = await self.session.execute(
-            select(Operation).order_by(Operation.timestamp.desc()).limit(limit)
-        )
-        return list(result.scalars().all())
 
     # --- Seed demo data ------------------------------------------------------
 
@@ -580,5 +417,5 @@ class MemoryManager:
     @staticmethod
     def _extract_tags(text: str) -> list[str]:
         common = {"the", "is", "at", "which", "on", "a", "an", "and", "or", "but", "in", "with", "to", "for", "of", "this", "that", "it", "from"}
-        words = re.findall(r'[a-z0-9]+', text.lower())
+        words = re.findall(r"[a-z0-9]+", text.lower())
         return [w for w in words if len(w) > 3 and w not in common][:5]

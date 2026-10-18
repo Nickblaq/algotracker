@@ -1,5 +1,5 @@
 /* ============================================================
-   Hierarchical Memory for LLMs — App Styles
+   Hierarchical Memory for LLMs — Global Styles
    Clean light theme, mobile-first responsive design
    ============================================================ */
 
@@ -30,6 +30,7 @@
 
   /* Primary */
   --primary: #2563EB;
+  --primary-foreground: #FFFFFF;
   --primary-light: #DBEAFE;
   --primary-dark: #1D4ED8;
 
@@ -63,7 +64,7 @@
   padding: 0;
 }
 
-html, body, #root {
+html, body {
   height: 100%;
 }
 
@@ -1805,14 +1806,6 @@ textarea.input {
 .page-memories-sidebar {
   flex: 1;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
-}
-
-.page-memories-map {
-  width: 400px;
-  flex-shrink: 0;
-  overflow-y: auto;
-  padding: var(--space-md);
 }
 
 @media (max-width: 768px) {

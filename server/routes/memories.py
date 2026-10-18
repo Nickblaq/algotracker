@@ -4,11 +4,9 @@ Memory-related API endpoints.
 - GET    /api/memories              List all memories (optional tier filter)
 - POST   /api/memories              Create a new memory
 - GET    /api/memories/{uid}        Get a single memory
-- PATCH  /api/memories/{uid}        Update a memory
 - DELETE /api/memories/{uid}        Delete a memory
 - POST   /api/memories/search       Search memories by text/tags
 - POST   /api/memories/retrieve     Semantic retrieval (TF-IDF cosine similarity)
-- POST   /api/memories/associate    Link two memories
 - POST   /api/memories/decay        Run decay pass
 - POST   /api/memories/consolidate  Run consolidation pass
 - POST   /api/memories/prune        Prune low-importance memories
@@ -22,12 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_session
 from ..memory_manager import MemoryManager
 from ..schemas import (
-    MemoryAssociateRequest,
     MemoryCreate,
     MemoryListResponse,
     MemoryResponse,
     MemorySearchRequest,
-    MemoryUpdate,
 )
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
@@ -81,21 +77,6 @@ async def get_memory(
     return MemoryResponse(**mem.to_dict())
 
 
-@router.patch("/{uid}", response_model=MemoryResponse)
-async def update_memory(
-    uid: str,
-    body: MemoryUpdate,
-    manager: MemoryManager = Depends(_manager),
-):
-    """Update memory fields."""
-    updates = body.model_dump(exclude_unset=True)
-    mem = await manager.update_memory(uid, **updates)
-    if mem is None:
-        raise HTTPException(status_code=404, detail="Memory not found")
-    await manager.session.commit()
-    return MemoryResponse(**mem.to_dict())
-
-
 @router.delete("/{uid}", status_code=204)
 async def delete_memory(
     uid: str,
@@ -136,22 +117,6 @@ async def retrieve_memories(
         memories=[MemoryResponse(**m.to_dict()) for m in memories],
         total=len(memories),
     )
-
-
-# --- Association --------------------------------------------------------------
-
-
-@router.post("/associate")
-async def associate_memories(
-    body: MemoryAssociateRequest,
-    manager: MemoryManager = Depends(_manager),
-):
-    """Create a bidirectional association between two memories."""
-    ok = await manager.associate_memories(body.from_id, body.to_id)
-    if not ok:
-        raise HTTPException(status_code=400, detail="Could not associate memories (not found or already linked)")
-    await manager.session.commit()
-    return {"status": "associated"}
 
 
 # --- Maintenance --------------------------------------------------------------

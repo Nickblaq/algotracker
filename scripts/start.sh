@@ -1,21 +1,20 @@
 #!/bin/bash
-# Start both the Vite dev server and the Python FastAPI backend.
-# Vite starts first so Freebuff detects port 5173 for the preview.
+# Start the Next.js dev server (port 3000) and the Python FastAPI backend (port 8000).
+# Next proxies /api/* to the backend, so the browser only ever talks to :3000.
 
 set -e
 
-echo "🎨 Starting Vite dev server on port 5173..."
-bun run dev &
-VITE_PID=$!
+echo "🎨 Starting Next.js dev server on port 3000..."
+npm run dev &
+NEXT_PID=$!
 
-# Give Vite a moment to bind
-sleep 2
+# Give Next a moment to bind
+sleep 3
 
-# Check if Vite started
-if kill -0 $VITE_PID 2>/dev/null; then
-  echo "✅ Vite dev server started (PID $VITE_PID)"
+if kill -0 $NEXT_PID 2>/dev/null; then
+  echo "✅ Next.js dev server started (PID $NEXT_PID)"
 else
-  echo "❌ Vite dev server failed to start"
+  echo "❌ Next.js dev server failed to start"
   exit 1
 fi
 
@@ -26,7 +25,6 @@ BACKEND_PID=$!
 # Give the backend a moment to bind
 sleep 2
 
-# Check if backend started
 if kill -0 $BACKEND_PID 2>/dev/null; then
   echo "✅ Python backend started (PID $BACKEND_PID)"
 else
@@ -34,15 +32,15 @@ else
   exit 1
 fi
 
-echo "🔗 Both servers running — Vite on :5173, Python API on :8000"
+echo "🔗 Both servers running — Next on :3000, Python API on :8000"
 
 # Cleanup on exit
 cleanup() {
   echo "🛑 Shutting down..."
   kill $BACKEND_PID 2>/dev/null || true
-  kill $VITE_PID 2>/dev/null || true
+  kill $NEXT_PID 2>/dev/null || true
   wait $BACKEND_PID 2>/dev/null || true
-  wait $VITE_PID 2>/dev/null || true
+  wait $NEXT_PID 2>/dev/null || true
 }
 trap cleanup EXIT
 

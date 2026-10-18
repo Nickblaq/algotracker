@@ -1,11 +1,10 @@
 """
-Chat and conversation API endpoints with session support.
+Chat and conversation API endpoints.
 
-- POST /api/chat/send          Process a user message in a session
-- POST /api/chat/respond       Store an assistant response in a session
-- GET  /api/chat/history       Get conversation history for a session
-- GET  /api/chat/sessions      List all chat sessions
-- POST /api/chat/clear         Clear a specific session
+- POST /api/chat/send     Process a user message in a session
+- POST /api/chat/respond  Store an assistant response in a session
+- GET  /api/chat/history  Get conversation history for a session
+- POST /api/chat/clear    Clear a specific session
 """
 
 from __future__ import annotations
@@ -15,11 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_session
 from ..memory_manager import MemoryManager
-from ..schemas import (
-    ChatRequest,
-    ConversationMessageResponse,
-    SessionResponse,
-)
+from ..schemas import ChatRequest, ConversationMessageResponse
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -79,13 +74,6 @@ async def store_response(
     return ConversationMessageResponse(**msg.to_dict())
 
 
-@router.get("/sessions", response_model=list[SessionResponse])
-async def list_sessions(manager: MemoryManager = Depends(_manager)):
-    """List all chat sessions with titles and metadata."""
-    sessions = await manager.list_sessions()
-    return [SessionResponse(**s) for s in sessions]
-
-
 @router.get("/history")
 async def get_history(
     session_id: str = "default",
@@ -106,14 +94,3 @@ async def clear_history(
     await manager.clear_conversation(session_id)
     await manager.session.commit()
     return {"status": "cleared"}
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    manager: MemoryManager = Depends(_manager),
-):
-    """Delete a chat session and all its messages."""
-    await manager.clear_conversation(session_id)
-    await manager.session.commit()
-    return {"status": "deleted"}

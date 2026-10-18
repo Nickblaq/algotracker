@@ -1,8 +1,9 @@
-import { useStore } from '../components/AppLayout';
-import { MemoryTierView } from '../components/MemoryTierView';
-import { MemoryMap } from '../components/MemoryMap';
+'use client';
 
-export function MemoriesPage() {
+import { useStore } from '@/components/AppShell';
+import { MemoryTierView } from '@/components/MemoryTierView';
+
+export default function MemoriesRoute() {
   const store = useStore();
 
   return (
@@ -13,13 +14,8 @@ export function MemoriesPage() {
           stats={store.stats}
           selectedTier={store.selectedTier}
           onSelectTier={store.setSelectedTier}
-          onAssociate={store.manualAssociate}
           onCreateMemory={store.createManualMemory}
-          refresh={store.refresh}
         />
-      </div>
-      <div className="page-memories-map">
-        <MemoryMap memories={store.memories} />
       </div>
     </div>
   );
