@@ -24,6 +24,6 @@
   },
   "deploy": {
     "startCommand": "bash start.sh",
-    "aptPackages": ["ffmpeg"]
+    "aptPackages": ["...", "ffmpeg"]
   }
 }
