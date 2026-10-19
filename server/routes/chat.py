@@ -35,8 +35,8 @@ async def send_message(
     session_id = body.session_id or "default"
     user_msg, memories_retrieved = await manager.process_user_message(body.content, session_id)
 
-    # Build context for the LLM
-    context_parts = [f"[{m.tier}] {m.content}" for m in memories_retrieved]
+    # Build context for the LLM — memories carry their emergent weight
+    context_parts = [f"[w={m.effective_weight():.2f}] {m.content}" for m in memories_retrieved]
     context_block = "\n".join(context_parts) if context_parts else "(No memories retrieved yet)"
 
     # Get last 10 messages for this session
@@ -44,8 +44,8 @@ async def send_message(
     chat_messages = [{"role": m.role, "content": m.content} for m in history]
 
     system_prompt = (
-        f"You are a helpful AI assistant demonstrating hierarchical memory management.\n"
-        f"You have access to the following memories from previous interactions:\n"
+        f"You are a helpful AI assistant demonstrating a weighted graph memory system.\n"
+        f"You have access to the following memories from previous interactions (weight in brackets):\n"
         f"{context_block}\n\n"
         f"Use these memories to provide contextual responses. Mention when you recall something from memory."
     )
@@ -54,7 +54,7 @@ async def send_message(
 
     return {
         "message": ConversationMessageResponse(**user_msg.to_dict()).model_dump(),
-        "memoriesAccessed": [m.to_dict() for m in memories_retrieved],
+        "memoriesAccessed": await manager.serialize_memories(memories_retrieved),
         "suggestedPrompt": {
             "system": system_prompt,
             "messages": chat_messages,

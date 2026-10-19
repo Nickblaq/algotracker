@@ -5,7 +5,6 @@ Pydantic schemas for request validation and response serialization.
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from typing import Literal
 
 
 # --- Memory Schemas -----------------------------------------------------------
@@ -13,23 +12,21 @@ from typing import Literal
 
 class MemoryCreate(BaseModel):
     content: str
-    tier: Literal["sensory", "short_term", "long_term", "episodic", "procedural"] = "sensory"
     importance: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = []
 
 
 class MemoryResponse(BaseModel):
     id: str
-    tier: str
     content: str
+    weight: float  # emergent, 0-1, decays against time since last use
+    edgeCount: int
     importance: float
     accessCount: int
     lastAccessed: int  # epoch ms
     createdAt: int  # epoch ms
-    decayRate: float
     tags: list[str]
     metadata: dict
-    consolidated: bool
 
 
 class MemoryListResponse(BaseModel):
@@ -39,7 +36,6 @@ class MemoryListResponse(BaseModel):
 
 class MemorySearchRequest(BaseModel):
     query: str
-    tier: str | None = None
     top_k: int = Field(default=10, ge=1, le=100)
 
 

@@ -6,7 +6,7 @@
  * needs CORS.
  */
 
-import type { ConversationMessage, MemoryEntry, MemoryTier } from '../types';
+import type { ConversationMessage, MemoryEntry } from '../types';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -44,12 +44,11 @@ export interface SendMessageResponse {
 // ---------- Memory API -------------------------------------------------------
 
 export const memories = {
-  list: (tier?: string) =>
-    request<MemoryListResponse>(`/api/memories${tier ? `?tier=${tier}` : ''}`),
+  list: () =>
+    request<MemoryListResponse>('/api/memories'),
 
   create: (data: {
     content: string;
-    tier?: MemoryTier;
     importance?: number;
     tags?: string[];
   }) =>
@@ -63,24 +62,16 @@ export const memories = {
   delete: (uid: string) =>
     request<void>(`/api/memories/${uid}`, { method: 'DELETE' }),
 
-  search: (query: string, tier?: string, topK = 10) =>
+  search: (query: string, topK = 10) =>
     request<MemoryListResponse>('/api/memories/search', {
       method: 'POST',
-      body: JSON.stringify({ query, tier, top_k: topK }),
+      body: JSON.stringify({ query, top_k: topK }),
     }),
 
   retrieve: (query: string, topK = 5) =>
     request<MemoryListResponse>('/api/memories/retrieve', {
       method: 'POST',
       body: JSON.stringify({ query, top_k: topK }),
-    }),
-
-  decay: () =>
-    request<{ deleted: number }>('/api/memories/decay', { method: 'POST' }),
-
-  consolidate: () =>
-    request<{ consolidated: number }>('/api/memories/consolidate', {
-      method: 'POST',
     }),
 
   prune: () =>

@@ -6,7 +6,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Hierarchical Memory for LLMs',
   description:
-    'A five-tier memory system for LLMs: sensory, short term, long term, episodic and procedural.',
+    'A weighted graph memory system for LLMs: every memory carries an emergent weight built from use, connections and recency.',
   icons: { icon: '/logo.svg' },
   manifest: '/manifest.webmanifest',
 };

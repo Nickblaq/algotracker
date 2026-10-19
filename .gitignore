@@ -10,3 +10,6 @@ next-env.d.ts
 
 # python
 .venv/
+
+# typescript incremental build info
+*.tsbuildinfo

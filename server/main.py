@@ -36,9 +36,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Hierarchical Memory for LLMs — Backend API",
     description=(
-        "REST API for the HMM memory system. Provides persistent memory storage, "
-        "TF-IDF vector embeddings, decay/consolidation, and conversation context "
-        "via an async SQLAlchemy + SQLite backend."
+        "REST API for the HMM memory system. Provides persistent memory storage "
+        "with emergent weights (use + graph edges + similarity, decaying over "
+        "time), TF-IDF vector embeddings, and conversation context via an async "
+        "SQLAlchemy + SQLite backend."
     ),
     version="1.0.0",
     lifespan=lifespan,

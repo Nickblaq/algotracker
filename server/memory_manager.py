@@ -1,10 +1,18 @@
 """
 Core memory management engine.
 
+Emergent weighted-graph memory:
+  - Every memory carries a continuous weight that rises with use
+    (recency-weighted access, query similarity, edge strength) and decays
+    against time since it was last used. There are no tiers and no
+    promotion thresholds.
+  - Memories retrieved together are linked by edges, which strengthen on
+    co-retrieval and are seeded from embedding similarity at creation.
+  - Retrieval blends query similarity with the stored weight, so memories
+    that keep mattering keep surfacing — and ones that don't fade out.
+
   - TF-IDF vector embeddings via scikit-learn
   - Async SQLAlchemy persistence
-  - Numpy-accelerated similarity scoring
-  - Server-side decay and consolidation
 
 Usage:
     manager = MemoryManager(session)
@@ -14,6 +22,7 @@ Usage:
 
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import re
@@ -25,7 +34,13 @@ import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import ConversationMessage, Memory
+from .models import (
+    EDGE_DECAY_PER_HOUR,
+    WEIGHT_DECAY_PER_HOUR,
+    ConversationMessage,
+    Memory,
+    MemoryEdge,
+)
 
 
 def _uid() -> str:
@@ -36,15 +51,27 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-TIER_ORDER = ["sensory", "short_term", "long_term", "episodic", "procedural"]
+# --- Tuning -------------------------------------------------------------------
 
-TIER_CONFIG: dict[str, dict] = {
-    "sensory":     {"capacity": 50,  "decay_base": 0.15, "promotion_threshold": 0.3},
-    "short_term":  {"capacity": 30,  "decay_base": 0.08, "promotion_threshold": 0.5},
-    "long_term":   {"capacity": 100, "decay_base": 0.02, "promotion_threshold": 0.7},
-    "episodic":    {"capacity": 60,  "decay_base": 0.03, "promotion_threshold": 0.6},
-    "procedural":  {"capacity": 40,  "decay_base": 0.01, "promotion_threshold": 0.8},
-}
+# Retrieval score = weighted blend of what the query says and how strong the
+# memory already is.
+RETRIEVAL_W_SIM = 0.5        # TF-IDF cosine similarity to the query
+RETRIEVAL_W_WEIGHT = 0.4     # emergent weight (use + edges + recency)
+RETRIEVAL_W_IMPORTANCE = 0.1  # authored importance seed
+
+# On retrieval, weight rises by this blend of the signals that just proved the
+# memory relevant, scaled by remaining headroom (so it approaches 1.0 with
+# diminishing gains). Use only ever raises weight; only time lowers it.
+ACCESS_W_SIM = 0.5         # how well it matched this query
+ACCESS_W_NEIGHBOR = 0.3    # strength of its graph neighborhood
+
+# Two memories embedding this similarly are linked at creation time.
+SIM_EDGE_THRESHOLD = 0.7
+# Each co-retrieval adds this much edge strength (capped at 1.0).
+CO_RETRIEVAL_BOOST = 0.1
+# A memory weaker than this and structurally isolated is forgettable.
+PRUNE_WEIGHT_FLOOR = 0.05
+PRUNE_EDGE_FLOOR = 0.02
 
 
 # ---------------------------------------------------------------------------
@@ -123,12 +150,153 @@ class MemoryManager:
             return 0.0
         return float(np.dot(a_trunc, b_trunc) / (norm_a * norm_b))
 
+    # --- Graph: edges ---------------------------------------------------------
+
+    async def _find_edge(self, a: str, b: str) -> MemoryEdge | None:
+        low, high = (a, b) if a <= b else (b, a)
+        result = await self.session.execute(
+            select(MemoryEdge).where(
+                MemoryEdge.from_uid == low, MemoryEdge.to_uid == high
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _associate(self, uids: list[str]) -> None:
+        """Strengthen the edge between every pair of memories retrieved together."""
+        unique = list(dict.fromkeys(uids))
+        if len(unique) < 2:
+            return
+        now = _utcnow()
+        for a, b in itertools.combinations(unique, 2):
+            edge = await self._find_edge(a, b)
+            if edge is not None:
+                edge.weight = min(1.0, edge.weight + CO_RETRIEVAL_BOOST)
+                edge.last_hit = now
+            else:
+                low, high = (a, b) if a <= b else (b, a)
+                self.session.add(
+                    MemoryEdge(
+                        from_uid=low,
+                        to_uid=high,
+                        weight=CO_RETRIEVAL_BOOST,
+                        last_hit=now,
+                    )
+                )
+        await self.session.flush()
+
+    async def _seed_edges_from_similarity(self, mem: Memory, others: list[Memory]) -> None:
+        """Link a brand-new memory to embeddings it already resembles."""
+        if not mem.embedding:
+            return
+        vec = np.array(mem.embedding, dtype=float)
+        now = _utcnow()
+        for other in others:
+            if other.uid == mem.uid or not other.embedding:
+                continue
+            ovec = np.array(other.embedding, dtype=float)
+            sim = self._cosine_sim(vec, ovec)
+            if sim < SIM_EDGE_THRESHOLD:
+                continue
+            existing = await self._find_edge(mem.uid, other.uid)
+            if existing is None:
+                low, high = (mem.uid, other.uid) if mem.uid <= other.uid else (other.uid, mem.uid)
+                self.session.add(
+                    MemoryEdge(
+                        from_uid=low,
+                        to_uid=high,
+                        weight=min(1.0, sim),
+                        last_hit=now,
+                    )
+                )
+        await self.session.flush()
+
+    async def _neighbor_weight(self, uid: str, now: datetime) -> float:
+        """Decayed edge strength × neighbor weight, averaged over all neighbors.
+
+        The PageRank-flavoured signal: memories linked to strong memories are
+        themselves worth more.
+        """
+        result = await self.session.execute(
+            select(MemoryEdge).where(
+                (MemoryEdge.from_uid == uid) | (MemoryEdge.to_uid == uid)
+            )
+        )
+        edges = list(result.scalars().all())
+        if not edges:
+            return 0.0
+
+        other_uids = [
+            e.to_uid if e.from_uid == uid else e.from_uid for e in edges
+        ]
+        mems_result = await self.session.execute(
+            select(Memory).where(Memory.uid.in_(other_uids))
+        )
+        by_uid = {m.uid: m for m in mems_result.scalars().all()}
+
+        scores: list[float] = []
+        for edge in edges:
+            other_uid = edge.to_uid if edge.from_uid == uid else edge.from_uid
+            other = by_uid.get(other_uid)
+            if other is None:
+                continue
+            hit = edge.last_hit if edge.last_hit.tzinfo else edge.last_hit.replace(tzinfo=timezone.utc)
+            edge_age_h = max(0.0, (now - hit).total_seconds() / 3600.0)
+            edge_strength = edge.weight * math.exp(-EDGE_DECAY_PER_HOUR * edge_age_h)
+            scores.append(edge_strength * other.effective_weight(now))
+
+        return sum(scores) / len(scores) if scores else 0.0
+
+    async def _has_live_edges(self, uid: str, now: datetime) -> bool:
+        """True while the memory still has any edge strong enough to matter."""
+        result = await self.session.execute(
+            select(MemoryEdge).where(
+                (MemoryEdge.from_uid == uid) | (MemoryEdge.to_uid == uid)
+            )
+        )
+        for edge in result.scalars().all():
+            hit = edge.last_hit if edge.last_hit.tzinfo else edge.last_hit.replace(tzinfo=timezone.utc)
+            age_h = max(0.0, (now - hit).total_seconds() / 3600.0)
+            if edge.weight * math.exp(-EDGE_DECAY_PER_HOUR * age_h) >= PRUNE_EDGE_FLOOR:
+                return True
+        return False
+
+    async def _delete_edges_for(self, uid: str) -> None:
+        from sqlalchemy import delete
+
+        await self.session.execute(
+            delete(MemoryEdge).where(
+                (MemoryEdge.from_uid == uid) | (MemoryEdge.to_uid == uid)
+            )
+        )
+
+    async def edge_counts(self, uids: list[str]) -> dict[str, int]:
+        """How many edges each given memory has (single batched query)."""
+        if not uids:
+            return {}
+        uid_set = set(uids)
+        result = await self.session.execute(
+            select(MemoryEdge.from_uid, MemoryEdge.to_uid).where(
+                (MemoryEdge.from_uid.in_(uid_set)) | (MemoryEdge.to_uid.in_(uid_set))
+            )
+        )
+        counts = {u: 0 for u in uids}
+        for a, b in result.all():
+            if a in uid_set:
+                counts[a] += 1
+            if b in uid_set:
+                counts[b] += 1
+        return counts
+
+    async def serialize_memories(self, memories: list[Memory]) -> list[dict]:
+        """to_dict() for each memory, enriched with its edge count."""
+        counts = await self.edge_counts([m.uid for m in memories])
+        return [m.to_dict(counts.get(m.uid, 0)) for m in memories]
+
     # --- Memory CRUD ---------------------------------------------------------
 
     async def create_memory(
         self,
         content: str,
-        tier: str = "sensory",
         importance: float = 0.5,
         tags: list[str] | None = None,
     ) -> Memory:
@@ -137,13 +305,14 @@ class MemoryManager:
 
         mem = Memory(
             uid=_uid(),
-            tier=tier,
+            tier="unclassified",  # legacy column, ignored by the graph
             content=content,
             importance=importance,
+            weight=importance,  # seeded from authored importance
             access_count=0,
             last_accessed=now,
             created_at=now,
-            decay_rate=TIER_CONFIG[tier]["decay_base"],
+            decay_rate=WEIGHT_DECAY_PER_HOUR,
             tags=tags or [],
             consolidated=0,
         )
@@ -156,24 +325,29 @@ class MemoryManager:
         emb = self._compute_embeddings([content], corpus)
         if emb:
             mem.embedding = emb[0]
-
         await self.session.flush()
+
+        # Seed graph links from embedding similarity
+        await self._seed_edges_from_similarity(mem, all_mems)
         return mem
 
     async def get_memory(self, uid: str) -> Memory | None:
         return await self._get_memory_by_uid(uid)
 
-    async def list_memories(self, tier: str | None = None) -> list[Memory]:
-        q = select(Memory)
-        if tier:
-            q = q.where(Memory.tier == tier)
-        result = await self.session.execute(q)
-        return list(result.scalars().all())
+    async def list_memories(self) -> list[Memory]:
+        # Sort by effective (decayed) weight — the value the API returns — not
+        # the stored boost, so the list order matches what clients display.
+        result = await self.session.execute(select(Memory))
+        mems = list(result.scalars().all())
+        now = _utcnow()
+        mems.sort(key=lambda m: m.effective_weight(now), reverse=True)
+        return mems
 
     async def delete_memory(self, uid: str) -> bool:
         mem = await self._get_memory_by_uid(uid)
         if mem is None:
             return False
+        await self._delete_edges_for(uid)
         await self.session.delete(mem)
         await self.session.flush()
         return True
@@ -181,7 +355,8 @@ class MemoryManager:
     # --- Retrieval -----------------------------------------------------------
 
     async def retrieve_memories(self, query: str, top_k: int = 5) -> list[Memory]:
-        """Retrieve memories using TF-IDF cosine similarity + recency + importance weighting."""
+        """Score memories by query similarity blended with emergent weight,
+        link whatever comes back together, then lift each hit's weight."""
         all_mems = await self._get_all_memories()
         if not all_mems:
             return []
@@ -189,38 +364,47 @@ class MemoryManager:
         corpus = [m.content for m in all_mems]
         query_vec = _encoder.encode([query], corpus=corpus)[0]
 
-        now_ms = time.time() * 1000
-        scored: list[tuple[Memory, float]] = []
+        now = _utcnow()
+        scored: list[tuple[Memory, float, float]] = []
 
         for mem in all_mems:
             raw_emb = mem.embedding
             mem_vec = np.array(raw_emb, dtype=float) if raw_emb else np.zeros(len(query_vec))
             text_sim = self._cosine_sim(query_vec, mem_vec)
-            recency_bonus = math.exp(-0.001 * (now_ms - mem.last_accessed.timestamp() * 1000))
-            importance_bonus = mem.importance
-            access_bonus = math.log1p(mem.access_count) * 0.1
+            score = (
+                RETRIEVAL_W_SIM * text_sim
+                + RETRIEVAL_W_WEIGHT * mem.effective_weight(now)
+                + RETRIEVAL_W_IMPORTANCE * mem.importance
+            )
+            scored.append((mem, score, text_sim))
 
-            score = text_sim * 0.4 + recency_bonus * 0.2 + importance_bonus * 0.3 + access_bonus * 0.1
-            scored.append((mem, score))
+        scored.sort(key=lambda t: t[1], reverse=True)
+        top = scored[:top_k]
+        retrieved = [mem for mem, _, _ in top]
 
-        scored.sort(key=lambda x: x[1], reverse=True)
-        retrieved = [mem for mem, _ in scored[:top_k]]
+        # Co-retrieval evidence: link everything that came back together
+        await self._associate([m.uid for m in retrieved])
 
-        for mem in retrieved:
+        # Reinforcement: additive boost scaled by headroom — recurring
+        # retrieval keeps climbing toward 1.0 with diminishing gains.
+        for mem, _, text_sim in top:
+            eff = mem.effective_weight(now)
+            neighbor = await self._neighbor_weight(mem.uid, now)
+            boost = min(
+                1.0, ACCESS_W_SIM * text_sim + ACCESS_W_NEIGHBOR * neighbor
+            )
+            mem.weight = max(0.0, min(1.0, eff + (1.0 - eff) * boost))
             mem.access_count += 1
-            mem.last_accessed = _utcnow()
+            mem.last_accessed = now
 
         await self.session.flush()
         return retrieved
 
     # --- Search --------------------------------------------------------------
 
-    async def search_memories(self, query: str, tier: str | None = None) -> list[Memory]:
+    async def search_memories(self, query: str) -> list[Memory]:
         """Simple text search across memory content and tags."""
-        q = select(Memory)
-        if tier:
-            q = q.where(Memory.tier == tier)
-        result = await self.session.execute(q)
+        result = await self.session.execute(select(Memory))
         all_mems = list(result.scalars().all())
 
         query_lower = query.lower()
@@ -231,65 +415,30 @@ class MemoryManager:
             if content_match or tag_match:
                 results.append(mem)
 
-        results.sort(key=lambda m: m.importance, reverse=True)
+        now = _utcnow()
+        results.sort(key=lambda m: m.effective_weight(now), reverse=True)
         return results
-
-    # --- Decay ---------------------------------------------------------------
-
-    async def decay_all_memories(self) -> int:
-        """Apply exponential decay to all memories. Delete low-importance sensory."""
-        now = datetime.now(timezone.utc)
-        all_mems = await self._get_all_memories()
-        deleted = 0
-
-        for mem in all_mems:
-            last = mem.last_accessed
-            if last.tzinfo is None:
-                last = last.replace(tzinfo=timezone.utc)
-            age_sec = (now - last).total_seconds()
-            decay = math.exp(-mem.decay_rate * (age_sec / 60))
-            mem.importance = max(0, mem.importance * decay)
-
-            if mem.importance < 0.05 and mem.tier == "sensory":
-                await self.session.delete(mem)
-                deleted += 1
-
-        await self.session.flush()
-        return deleted
-
-    # --- Consolidation -------------------------------------------------------
-
-    async def consolidate_memories(self) -> int:
-        """Promote memories that meet importance + access thresholds to the next tier."""
-        all_mems = await self._get_all_memories()
-        consolidated = 0
-
-        for i in range(len(TIER_ORDER) - 1):
-            tier = TIER_ORDER[i]
-            next_tier = TIER_ORDER[i + 1]
-            threshold = TIER_CONFIG[tier]["promotion_threshold"]
-
-            for mem in all_mems:
-                if mem.tier == tier and mem.importance >= threshold and mem.access_count >= 2:
-                    mem.tier = next_tier
-                    mem.consolidated = 1
-                    mem.decay_rate = TIER_CONFIG[next_tier]["decay_base"]
-                    consolidated += 1
-
-        await self.session.flush()
-        return consolidated
 
     # --- Pruning -------------------------------------------------------------
 
     async def prune_memories(self) -> int:
-        """Remove low-importance, never-accessed memories."""
+        """Forget what's forgettable: too weak to recall and graph-isolated.
+
+        Weak-but-connected memories survive — their neighbors keep them alive
+        until the edges themselves decay.
+        """
+        now = _utcnow()
         all_mems = await self._get_all_memories()
         pruned = 0
 
         for mem in all_mems:
-            if mem.importance < 0.1 and mem.access_count == 0:
-                await self.session.delete(mem)
-                pruned += 1
+            if mem.effective_weight(now) >= PRUNE_WEIGHT_FLOOR:
+                continue
+            if await self._has_live_edges(mem.uid, now):
+                continue
+            await self._delete_edges_for(mem.uid)
+            await self.session.delete(mem)
+            pruned += 1
 
         await self.session.flush()
         return pruned
@@ -301,13 +450,13 @@ class MemoryManager:
         memories_retrieved = await self.retrieve_memories(content, top_k=3)
         memories_created: list[str] = []
 
-        # Extract key sentences and create sensory memories
+        # Extract key sentences and store them as new memories
         sentences = re.split(r"[.!?]+", content)
         key_phrases = [s.strip() for s in sentences if len(s.strip()) > 10][:3]
 
         for phrase in key_phrases:
             tags = self._extract_tags(content)
-            mem = await self.create_memory(phrase, "sensory", 0.6 + (hash(phrase) % 30) / 100, tags)
+            mem = await self.create_memory(phrase, 0.6 + (hash(phrase) % 30) / 100, tags)
             memories_created.append(mem.uid)
 
         # Auto-generate title from first user message in session
@@ -336,21 +485,16 @@ class MemoryManager:
         return user_msg, memories_retrieved
 
     async def process_assistant_response(self, content: str, session_id: str = "default") -> ConversationMessage:
-        """Store an assistant response as short_term memory."""
-        memories_created: list[str] = []
-
-        mem = await self.create_memory(content, "short_term", 0.5 + (hash(content) % 40) / 100, ["assistant-response"])
-        memories_created.append(mem.uid)
-
-        # Check for procedural patterns
+        """Store an assistant response as a single memory (tagged by pattern)."""
+        tags = ["assistant-response"]
         if re.search(r"\b(how to|steps|process|method|technique)\b", content, re.IGNORECASE):
-            proc = await self.create_memory(content, "procedural", 0.7, ["procedural-knowledge"])
-            memories_created.append(proc.uid)
-
-        # Check for episodic markers
+            tags.append("procedural-knowledge")
         if re.search(r"\b(experience|happened|event|story|when)\b", content, re.IGNORECASE):
-            epi = await self.create_memory(content, "episodic", 0.65, ["episodic-memory"])
-            memories_created.append(epi.uid)
+            tags.append("episodic-memory")
+
+        mem = await self.create_memory(
+            content, 0.5 + (hash(content) % 40) / 100, tags
+        )
 
         msg = ConversationMessage(
             uid=_uid(),
@@ -359,7 +503,7 @@ class MemoryManager:
             content=content,
             timestamp=_utcnow(),
             memories_accessed_json="[]",
-            memories_created_json=json.dumps(memories_created),
+            memories_created_json=json.dumps([mem.uid]),
         )
         self.session.add(msg)
         await self.session.flush()
@@ -394,22 +538,22 @@ class MemoryManager:
             return
 
         demo = [
-            ("User mentioned wanting to understand hierarchical memory management for LLMs", "sensory", 0.7, ["memory", "hierarchy"]),
-            ("Key concept: working memory in transformer attention mechanisms", "sensory", 0.6, ["transformer", "attention"]),
-            ("Memory consolidation mimics hippocampal replay during sleep cycles", "sensory", 0.65, ["consolidation", "hippocampus"]),
-            ("Short-term buffer decays exponentially without reinforcement", "sensory", 0.55, ["decay", "short-term"]),
-            ("Procedural memories encode step-by-step reasoning patterns", "sensory", 0.5, ["procedural", "reasoning"]),
-            ("Hierarchical memory systems separate storage by retention duration and access patterns", "short_term", 0.75, ["hierarchy", "storage"]),
-            ("The memory manager uses importance scores to determine promotion between tiers", "short_term", 0.7, ["importance", "promotion"]),
-            ("Consolidation promotes frequently-accessed memories from short-term to long-term storage", "short_term", 0.68, ["consolidation", "long-term"]),
-            ("Effective LLM memory systems implement 3-5 distinct tiers with different decay rates and capacities", "long_term", 0.85, ["llm", "tiers", "decay"]),
-            ("Memory retrieval uses cosine similarity combined with recency and importance weighting", "long_term", 0.82, ["retrieval", "similarity"]),
-            ("Session 1: User demonstrated how memory operations flow from sensory input through consolidation to long-term storage", "episodic", 0.78, ["session", "demonstration"]),
-            ("Steps to retrieve relevant memories: 1) tokenize query 2) compute similarity 3) apply importance weighting 4) return top-k results", "procedural", 0.9, ["retrieval", "algorithm"]),
+            ("User mentioned wanting to understand hierarchical memory management for LLMs", 0.7, ["memory", "hierarchy"]),
+            ("Key concept: working memory in transformer attention mechanisms", 0.6, ["transformer", "attention"]),
+            ("Memory consolidation mimics hippocampal replay during sleep cycles", 0.65, ["consolidation", "hippocampus"]),
+            ("Short-term buffer decays exponentially without reinforcement", 0.55, ["decay", "short-term"]),
+            ("Procedural memories encode step-by-step reasoning patterns", 0.5, ["procedural", "reasoning"]),
+            ("Hierarchical memory systems separate storage by retention duration and access patterns", 0.75, ["hierarchy", "storage"]),
+            ("Frequently retrieved memories strengthen; unused connections weaken over time", 0.7, ["weights", "retrieval"]),
+            ("Consolidation promotes frequently-accessed memories from short-term to long-term storage", 0.68, ["consolidation", "long-term"]),
+            ("Effective LLM memory systems track usage signals rather than fixed category thresholds", 0.85, ["llm", "weights", "decay"]),
+            ("Memory retrieval uses cosine similarity combined with recency and importance weighting", 0.82, ["retrieval", "similarity"]),
+            ("Session 1: User demonstrated how memory operations flow from input through retrieval and reinforcement", 0.78, ["session", "demonstration"]),
+            ("Steps to retrieve relevant memories: 1) tokenize query 2) compute similarity 3) apply weight 4) return top-k results", 0.9, ["retrieval", "algorithm"]),
         ]
 
-        for content, tier, importance, tags in demo:
-            await self.create_memory(content, tier, importance, tags)
+        for content, importance, tags in demo:
+            await self.create_memory(content, importance, tags)
         await self.session.commit()
 
     # --- Internal helpers ----------------------------------------------------
