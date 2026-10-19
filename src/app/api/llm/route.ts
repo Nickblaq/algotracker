@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
+import { OPENROUTER_API_KEY, OPENROUTER_MODEL } from '@/lib/config';
 
 /**
- * OpenRouter credentials for the assistant replies.
+ * OpenRouter proxy for assistant replies.
  *
- * This module is server-only, so the key never reaches the browser bundle.
- * It is the single place in the app that talks to the model provider.
+ * Credentials live in `src/lib/config.ts` so the key and model are changed in
+ * one place. This module is server-only, so the key never reaches the browser
+ * bundle — do not import the config from a client component.
  */
-const OPENROUTER_API_KEY = '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';
-const OPENROUTER_MODEL = 'openrouter/free';
-
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface LlmRequestBody {

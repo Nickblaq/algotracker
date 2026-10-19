@@ -45,14 +45,15 @@ python3 -m uvicorn server.main:app --port 8000
 
 ## Configuration
 
-There are no environment variables. The two settings live as constants at the
-top of the file that uses them:
+There are no environment variables. Settings are constants:
 
 - `PYTHON_API` in `next.config.ts` — where FastAPI runs
-- `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` in `src/app/api/llm/route.ts`
+- `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` in `src/lib/config.ts` — the single
+  source for the model and key
 
-The model key is only read by that route handler, which runs on the server, so
-it is never bundled into the browser.
+The config is imported only by `src/app/api/llm/route.ts`, which runs on the
+server, so the key is never bundled into the browser. Do not import it from a
+client component.
 
 ## Endpoints
 
