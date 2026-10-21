@@ -31,7 +31,7 @@ import uuid
 from datetime import datetime, timezone
 
 import numpy as np
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import (
@@ -354,9 +354,16 @@ class MemoryManager:
 
     # --- Retrieval -----------------------------------------------------------
 
-    async def retrieve_memories(self, query: str, top_k: int = 5) -> list[Memory]:
-        """Score memories by query similarity blended with emergent weight,
-        link whatever comes back together, then lift each hit's weight."""
+    async def retrieve_memories(
+        self, query: str, top_k: int = 5, reinforce: bool = True
+    ) -> list[Memory]:
+        """Rank memories by query similarity blended with emergent weight.
+
+        Reads are side-effect free unless `reinforce` is set. Chat uses
+        reinforce=False while a turn is in flight, then calls
+        `reinforce_memories` once the assistant reply is stored, so a stopped
+        or abandoned turn never mutates the graph.
+        """
         all_mems = await self._get_all_memories()
         if not all_mems:
             return []
@@ -379,15 +386,44 @@ class MemoryManager:
             scored.append((mem, score, text_sim))
 
         scored.sort(key=lambda t: t[1], reverse=True)
-        top = scored[:top_k]
-        retrieved = [mem for mem, _, _ in top]
+        retrieved = [mem for mem, _, _ in scored[:top_k]]
+
+        if not reinforce:
+            return retrieved
+
+        # Explicit reinforcement pass (the /api/memories/retrieve endpoint).
+        await self.reinforce_memories(query, [m.uid for m in retrieved])
+        return retrieved
+
+    async def reinforce_memories(self, query: str, uids: list[str]) -> None:
+        """Apply the graph write for one completed turn: link co-retrieved
+        memories together, then lift weight and access counts.
+
+        Called only when the assistant reply is stored, in the same
+        transaction, so discarded turns leave the graph untouched.
+        """
+        if not uids:
+            return
+
+        all_mems = await self._get_all_memories()
+        by_uid = {m.uid: m for m in all_mems}
+        targets = [by_uid[uid] for uid in uids if uid in by_uid]
+        if not targets:
+            return
+
+        corpus = [m.content for m in all_mems]
+        query_vec = _encoder.encode([query], corpus=corpus)[0]
+        now = _utcnow()
 
         # Co-retrieval evidence: link everything that came back together
-        await self._associate([m.uid for m in retrieved])
+        await self._associate([m.uid for m in targets])
 
         # Reinforcement: additive boost scaled by headroom — recurring
         # retrieval keeps climbing toward 1.0 with diminishing gains.
-        for mem, _, text_sim in top:
+        for mem in targets:
+            raw_emb = mem.embedding
+            mem_vec = np.array(raw_emb, dtype=float) if raw_emb else np.zeros(len(query_vec))
+            text_sim = self._cosine_sim(query_vec, mem_vec)
             eff = mem.effective_weight(now)
             neighbor = await self._neighbor_weight(mem.uid, now)
             boost = min(
@@ -398,7 +434,6 @@ class MemoryManager:
             mem.last_accessed = now
 
         await self.session.flush()
-        return retrieved
 
     # --- Search --------------------------------------------------------------
 
@@ -446,8 +481,12 @@ class MemoryManager:
     # --- Chat integration ----------------------------------------------------
 
     async def process_user_message(self, content: str, session_id: str = "default") -> tuple[ConversationMessage, list[Memory]]:
-        """Process a user chat message: retrieve context memories, create sensory memory."""
-        memories_retrieved = await self.retrieve_memories(content, top_k=3)
+        """Process a user chat message: retrieve context memories, create sensory memory.
+
+        Retrieval is read-only here — the memories this turn used only gain
+        weight once the assistant reply is stored.
+        """
+        memories_retrieved = await self.retrieve_memories(content, top_k=3, reinforce=False)
         memories_created: list[str] = []
 
         # Extract key sentences and store them as new memories
@@ -484,8 +523,21 @@ class MemoryManager:
 
         return user_msg, memories_retrieved
 
-    async def process_assistant_response(self, content: str, session_id: str = "default") -> ConversationMessage:
-        """Store an assistant response as a single memory (tagged by pattern)."""
+    async def process_assistant_response(
+        self, content: str, session_id: str = "default", reinforce: bool = True
+    ) -> ConversationMessage:
+        """Store an assistant response, then reinforce what the turn recalled.
+
+        Both writes happen together, so a completed turn is atomic: either the
+        reply and its weight boosts land, or neither does.
+        """
+        if reinforce:
+            last_user = await self.last_user_message(session_id)
+            if last_user is not None:
+                await self.reinforce_memories(
+                    last_user.content, last_user.memories_accessed
+                )
+
         tags = ["assistant-response"]
         if re.search(r"\b(how to|steps|process|method|technique)\b", content, re.IGNORECASE):
             tags.append("procedural-knowledge")
@@ -529,32 +581,103 @@ class MemoryManager:
             await self.session.delete(msg)
         await self.session.flush()
 
-    # --- Seed demo data ------------------------------------------------------
+    async def last_user_message(self, session_id: str = "default") -> ConversationMessage | None:
+        """Most recent user message in a session (the turn being answered)."""
+        result = await self.session.execute(
+            select(ConversationMessage)
+            .where(
+                ConversationMessage.session_id == session_id,
+                ConversationMessage.role == "user",
+            )
+            .order_by(ConversationMessage.id.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
-    async def seed_demo_data(self) -> None:
-        """Populate the database with demo memories if empty."""
-        count_result = await self.session.execute(select(func.count(Memory.id)))
-        if count_result.scalar() > 0:
-            return
+    async def list_sessions(self) -> list[dict]:
+        """Every session with its title, message count and last activity."""
+        result = await self.session.execute(
+            select(ConversationMessage).order_by(ConversationMessage.id.desc())
+        )
+        sessions: dict[str, dict] = {}
+        for msg in result.scalars().all():
+            info = sessions.get(msg.session_id)
+            if info is None:
+                info = {
+                    "sessionId": msg.session_id,
+                    "title": msg.content[:80],
+                    "messageCount": 0,
+                    "lastActivity": 0,
+                }
+                sessions[msg.session_id] = info
+            info["messageCount"] += 1
+            if msg.title:
+                info["title"] = msg.title
+            ts = int(msg.timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000) \
+                if msg.timestamp.tzinfo is None else int(msg.timestamp.timestamp() * 1000)
+            info["lastActivity"] = max(info["lastActivity"], ts)
+        return sorted(sessions.values(), key=lambda s: s["lastActivity"], reverse=True)
 
-        demo = [
-            ("User mentioned wanting to understand hierarchical memory management for LLMs", 0.7, ["memory", "hierarchy"]),
-            ("Key concept: working memory in transformer attention mechanisms", 0.6, ["transformer", "attention"]),
-            ("Memory consolidation mimics hippocampal replay during sleep cycles", 0.65, ["consolidation", "hippocampus"]),
-            ("Short-term buffer decays exponentially without reinforcement", 0.55, ["decay", "short-term"]),
-            ("Procedural memories encode step-by-step reasoning patterns", 0.5, ["procedural", "reasoning"]),
-            ("Hierarchical memory systems separate storage by retention duration and access patterns", 0.75, ["hierarchy", "storage"]),
-            ("Frequently retrieved memories strengthen; unused connections weaken over time", 0.7, ["weights", "retrieval"]),
-            ("Consolidation promotes frequently-accessed memories from short-term to long-term storage", 0.68, ["consolidation", "long-term"]),
-            ("Effective LLM memory systems track usage signals rather than fixed category thresholds", 0.85, ["llm", "weights", "decay"]),
-            ("Memory retrieval uses cosine similarity combined with recency and importance weighting", 0.82, ["retrieval", "similarity"]),
-            ("Session 1: User demonstrated how memory operations flow from input through retrieval and reinforcement", 0.78, ["session", "demonstration"]),
-            ("Steps to retrieve relevant memories: 1) tokenize query 2) compute similarity 3) apply weight 4) return top-k results", 0.9, ["retrieval", "algorithm"]),
-        ]
+    async def truncate_between(
+        self, session_id: str, after_uid: str, before_uid: str
+    ) -> int:
+        """Delete messages from `after_uid` (inclusive) up to `before_uid`.
 
-        for content, importance, tags in demo:
-            await self.create_memory(content, importance, tags)
-        await self.session.commit()
+        Used by edit-and-resend: the old copy of the edited message and every
+        stale turn after it go, while the freshly stored turn (the bound)
+        stays — the edit becomes the newest message. Nothing outside the
+        session is touched and no memory is deleted.
+        """
+        result = await self.session.execute(
+            select(ConversationMessage)
+            .where(ConversationMessage.session_id == session_id)
+            .order_by(ConversationMessage.id)
+        )
+        msgs = list(result.scalars().all())
+        index = {m.uid: i for i, m in enumerate(msgs)}
+        if after_uid not in index or before_uid not in index:
+            return 0
+        low, high = index[after_uid], index[before_uid]
+        if high <= low:
+            return 0
+        removed = 0
+        for msg in msgs[low:high]:
+            await self.session.delete(msg)
+            removed += 1
+        await self.session.flush()
+        return removed
+
+    async def recompute_weights(self) -> dict:
+        """Rebuild the graph deterministically from what can be trusted.
+
+        Stored weights are derived values, so they can always be recomputed
+        from authored importance plus access history, after which damaged
+        edges are dropped and faded, isolated memories are pruned. This is the
+        recovery path when anything looks wrong in the graph.
+        """
+        all_mems = await self._get_all_memories()
+        valid_uids = {m.uid for m in all_mems}
+
+        result = await self.session.execute(select(MemoryEdge))
+        edges_removed = 0
+        for edge in result.scalars().all():
+            if edge.from_uid not in valid_uids or edge.to_uid not in valid_uids:
+                await self.session.delete(edge)
+                edges_removed += 1
+
+        reweighted = 0
+        for mem in all_mems:
+            usage = min(1.0, mem.access_count / 10.0)
+            mem.weight = max(0.0, min(1.0, 0.35 * mem.importance + 0.65 * usage))
+            reweighted += 1
+        await self.session.flush()
+
+        pruned = await self.prune_memories()
+        return {
+            "reweighted": reweighted,
+            "edgesRemoved": edges_removed,
+            "pruned": pruned,
+        }
 
     # --- Internal helpers ----------------------------------------------------
 

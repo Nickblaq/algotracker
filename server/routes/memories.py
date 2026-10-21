@@ -135,3 +135,15 @@ async def run_prune(manager: MemoryManager = Depends(_manager)):
     count = await manager.prune_memories()
     await manager.session.commit()
     return {"pruned": count}
+
+
+@router.post("/recompute")
+async def run_recompute(manager: MemoryManager = Depends(_manager)):
+    """Rebuild weights from importance + access history, repair edges, prune.
+
+    Weights are derived values, so this is always safe and is the recovery
+    path when anything in the graph looks wrong.
+    """
+    summary = await manager.recompute_weights()
+    await manager.session.commit()
+    return summary

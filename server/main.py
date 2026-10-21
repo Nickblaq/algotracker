@@ -16,7 +16,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import async_session, init_db
-from .memory_manager import MemoryManager
 from .routes.chat import router as chat_router
 from .routes.memories import router as memories_router
 from .schemas import HealthResponse
@@ -24,12 +23,8 @@ from .schemas import HealthResponse
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: create tables and seed demo data if the database is empty."""
+    """Startup: create tables. Nothing is seeded — the graph starts empty."""
     await init_db()
-    async with async_session() as session:
-        manager = MemoryManager(session)
-        await manager.seed_demo_data()
-
     yield
 
 

@@ -25,6 +25,13 @@ export interface ConversationMessage {
   memoriesCreated: string[];
 }
 
+export interface ChatSession {
+  sessionId: string;
+  title: string;
+  messageCount: number;
+  lastActivity: number; // epoch ms
+}
+
 export type MemorySort = 'weight' | 'recent' | 'accessed' | 'edges';
 
 export type MemoryFilter = 'all' | 'strong' | 'steady' | 'fading' | 'connected';

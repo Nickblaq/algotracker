@@ -24,7 +24,13 @@ export default function ChatRoute() {
         sessionId={store.sessionId}
         memoryById={store.memoryById}
         memoryCount={store.stats.totalMemories}
+        sessions={store.sessions}
+        editingId={store.editingId}
         onSendMessage={store.processMessage}
+        onStop={store.stopProcessing}
+        onEditStart={store.startEditing}
+        onEditCancel={store.cancelEditing}
+        onSelectSession={store.openSession}
         onClearChat={() => setConfirmClear(true)}
         onNewChat={store.startNewChat}
         onRecallMemory={handleRecall}

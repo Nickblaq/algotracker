@@ -6,7 +6,7 @@
  * needs CORS.
  */
 
-import type { ConversationMessage, MemoryEntry } from '../types';
+import type { ChatSession, ConversationMessage, MemoryEntry } from '../types';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(path, {
@@ -76,6 +76,12 @@ export const memories = {
 
   prune: () =>
     request<{ pruned: number }>('/api/memories/prune', { method: 'POST' }),
+
+  recompute: () =>
+    request<{ reweighted: number; edgesRemoved: number; pruned: number }>(
+      '/api/memories/recompute',
+      { method: 'POST' },
+    ),
 };
 
 // ---------- Chat API ---------------------------------------------------------
@@ -87,11 +93,28 @@ export const chat = {
       body: JSON.stringify({ content, session_id: sessionId }),
     }),
 
-  respond: (content: string, sessionId: string) =>
+  respond: (content: string, sessionId: string, reinforce = true) =>
     request<ConversationMessage>('/api/chat/respond', {
       method: 'POST',
-      body: JSON.stringify({ content, session_id: sessionId }),
+      body: JSON.stringify({
+        content,
+        session_id: sessionId,
+        reinforce,
+      }),
     }),
+
+  truncate: (sessionId: string, afterUid: string, beforeUid: string) =>
+    request<{ removed: number }>('/api/chat/truncate', {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        after_uid: afterUid,
+        before_uid: beforeUid,
+      }),
+    }),
+
+  sessions: () =>
+    request<{ sessions: ChatSession[]; total: number }>('/api/chat/sessions'),
 
   history: (sessionId: string, limit = 50) =>
     request<ConversationMessage[]>(
@@ -108,10 +131,15 @@ export const chat = {
 // ---------- LLM proxy --------------------------------------------------------
 
 export const llm = {
-  complete: (system: string, messages: Array<{ role: string; content: string }>) =>
+  complete: (
+    system: string,
+    messages: Array<{ role: string; content: string }>,
+    signal?: AbortSignal,
+  ) =>
     request<{ content: string }>('/api/llm', {
       method: 'POST',
       body: JSON.stringify({ system, messages }),
+      signal,
     }),
 };
 

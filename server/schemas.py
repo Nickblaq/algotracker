@@ -47,6 +47,22 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+class RespondRequest(ChatRequest):
+    # False for echoes that must not touch the graph (e.g. stored error text).
+    reinforce: bool = True
+
+
+class TruncateRequest(BaseModel):
+    session_id: str = "default"
+    after_uid: str
+    before_uid: str
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[dict]
+    total: int
+
+
 class ConversationMessageResponse(BaseModel):
     id: str
     sessionId: str

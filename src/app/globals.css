@@ -2250,3 +2250,239 @@ input[type="range"]::-moz-range-thumb {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   Chat — markdown, stop, edit, session history
+   ============================================================ */
+
+.chat-shell {
+  position: relative;
+}
+
+/* Markdown in assistant bubbles */
+.md {
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p {
+  margin: 0 0 10px;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 16px 0 8px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.md h1 { font-size: 1.24em; }
+.md h2 { font-size: 1.14em; }
+.md h3 { font-size: 1.07em; }
+.md h4 { font-size: 1em; }
+
+.md ul,
+.md ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+}
+
+.md li {
+  margin: 3px 0;
+}
+
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+.md pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  overflow-x: auto;
+}
+
+.md pre code {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.md blockquote {
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.md a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md table {
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 0.94em;
+}
+
+.md th,
+.md td {
+  border: 1px solid var(--line);
+  padding: 5px 9px;
+  text-align: left;
+}
+
+.md th {
+  background: var(--surface-soft);
+  font-weight: 600;
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 14px 0;
+}
+
+/* Stop control — replaces the send button (and its spinner) while generating */
+.composer-stop {
+  background: var(--ink);
+  box-shadow: 0 6px 16px rgba(28, 26, 22, 0.25);
+}
+
+.composer-stop:hover:not(:disabled) {
+  background: #000;
+}
+
+/* Edit banner above the composer */
+.edit-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto 8px;
+  padding: 7px 8px 7px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--accent-ring);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
+.edit-banner span {
+  flex: 1;
+}
+
+/* The message being edited */
+.msg-editing .msg-bubble {
+  border-color: rgba(163, 67, 42, 0.5);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+}
+
+/* Pencil affordance on user messages */
+.msg-edit-btn {
+  opacity: 0;
+  transition: opacity 0.14s var(--ease);
+}
+
+.msg:hover .msg-edit-btn,
+.msg-edit-btn:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .msg-edit-btn {
+    opacity: 0.55;
+  }
+}
+
+/* Session history panel (drops down from the chat topbar) */
+.session-panel {
+  position: absolute;
+  z-index: 30;
+  top: 54px;
+  right: var(--s-4);
+  width: min(340px, calc(100% - var(--s-4) * 2));
+  max-height: min(420px, 60%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: rise 0.16s var(--ease) both;
+}
+
+.session-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  text-align: left;
+  transition: background 0.14s var(--ease);
+}
+
+.session-item:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.session-item.active {
+  background: var(--accent-soft);
+}
+
+.session-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.session-empty {
+  padding: 14px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chat-topbar-actions .btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}

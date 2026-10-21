@@ -8,6 +8,7 @@ import {
 } from 'react';
 import * as api from '../lib/api';
 import type {
+  ChatSession,
   MemoryEntry,
   MemoryFilter,
   MemorySort,
@@ -100,6 +101,11 @@ export function useMemoryStore() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [apiConnected, setApiConnected] = useState<boolean | null>(null);
 
+  // Chat extras: in-flight abort, message being edited, past sessions.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
+
   // Empty during SSR, then the stored session once hydrated.
   const sessionId = useSyncExternalStore(subscribeSession, currentSession, () => '');
   const sessionIdRef = useRef('');
@@ -160,9 +166,18 @@ export function useMemoryStore() {
     }
   }, []);
 
+  const refreshSessions = useCallback(async () => {
+    try {
+      const res = await api.chat.sessions();
+      setSessions(res.sessions);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
-    await Promise.all([refreshMemories(), refreshMessages()]);
-  }, [refreshMemories, refreshMessages]);
+    await Promise.all([refreshMemories(), refreshMessages(), refreshSessions()]);
+  }, [refreshMemories, refreshMessages, refreshSessions]);
 
   // --- Connection check + initial load --------------------------------------
 
@@ -211,40 +226,80 @@ export function useMemoryStore() {
     async (content: string): Promise<string> => {
       setIsProcessing(true);
       const currentSessionId = ensureSession();
+      const editing = editingId;
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
-        // 1. Store the user message and get the retrieved memory context
+        // 1. Store the user message and get the retrieved memory context.
+        //    Retrieval is read-only: nothing in the graph moves yet.
         const sendRes = await api.chat.send(content, currentSessionId);
         await refresh();
 
-        // 2. Call the model through the server-side proxy
+        // 2. Call the model through the server-side proxy (abortable).
         const { content: assistantContent } = await api.llm.complete(
           sendRes.suggestedPrompt.system,
           sendRes.suggestedPrompt.messages,
+          controller.signal,
         );
 
-        // 3. Store the assistant reply, which also creates memories
+        // 3. Store the reply — this is the transaction that reinforces the
+        //    memories this turn recalled. Stopped turns never reach it.
         await api.chat.respond(
           assistantContent || 'No response generated.',
           currentSessionId,
         );
+
+        // 4. Editing: only now that the new turn is safely stored do the stale
+        //    messages after the edited one get removed.
+        if (editing) {
+          const { removed } = await api.chat.truncate(
+            currentSessionId,
+            editing,
+            sendRes.message.id,
+          );
+          notify(
+            removed > 0
+              ? `Message updated — ${removed} stale ${removed === 1 ? 'message' : 'messages'} removed`
+              : 'Message updated',
+            'success',
+          );
+        }
+
+        setEditingId(null);
         await refresh();
         return assistantContent;
       } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        notify(errorMsg, 'error');
-        try {
-          await api.chat.respond(`Error: ${errorMsg}`, currentSessionId);
-          await refresh();
-        } catch {
-          /* ignore */
+        const aborted =
+          (err instanceof DOMException && err.name === 'AbortError') ||
+          (err instanceof Error && err.name === 'AbortError');
+
+        if (aborted) {
+          // The user stop: no reply is stored and the graph is untouched.
+          notify('Stopped — no reply was stored', 'info');
+          await refreshMessages();
+          return '';
         }
-        return `Error: ${errorMsg}`;
+
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        notify(`${errorMsg} — no reply was stored`, 'error');
+        setEditingId(null);
+        await refresh();
+        return '';
       } finally {
+        abortRef.current = null;
         setIsProcessing(false);
       }
     },
-    [refresh, notify, ensureSession],
+    [refresh, refreshMessages, notify, ensureSession, editingId],
   );
+
+  const stopProcessing = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  const startEditing = useCallback((id: string) => setEditingId(id), []);
+  const cancelEditing = useCallback(() => setEditingId(null), []);
 
   const clearChat = useCallback(async () => {
     try {
@@ -261,8 +316,21 @@ export function useMemoryStore() {
     sessionIdRef.current = id;
     persistSession(id);
     setMessages([]);
+    setEditingId(null);
     notify('Started a new conversation', 'success');
   }, [notify]);
+
+  const openSession = useCallback(
+    (id: string) => {
+      if (id === sessionIdRef.current) return;
+      sessionIdRef.current = id;
+      persistSession(id);
+      setEditingId(null);
+      setMessages([]);
+      void refreshMessages();
+    },
+    [refreshMessages],
+  );
 
   // --- Search / sort / filter ------------------------------------------------
 
@@ -419,6 +487,13 @@ export function useMemoryStore() {
     deleteMemory,
     clearChat,
     startNewChat,
+    openSession,
+    editingId,
+    sessions,
+    stopProcessing,
+    startEditing,
+    cancelEditing,
+    refreshSessions,
     notify,
     dismissToast,
     refresh,

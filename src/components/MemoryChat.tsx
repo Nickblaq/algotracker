@@ -6,17 +6,20 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  type KeyboardEvent,
 } from 'react';
-import type { ConversationMessage, MemoryEntry } from '@/types';
+import type { ChatSession, ConversationMessage, MemoryEntry } from '@/types';
 import {
   ArrowDownIcon,
   CheckIcon,
+  ClockIcon,
   CopyIcon,
+  PencilIcon,
   SendIcon,
   SparkIcon,
+  StopIcon,
   SuggestionIcon,
 } from '@/components/icons';
+import { MarkdownText } from '@/components/MarkdownText';
 import { clockTime, shortSession, truncate } from '@/lib/format';
 
 interface Props {
@@ -25,7 +28,13 @@ interface Props {
   sessionId: string;
   memoryById: Map<string, MemoryEntry>;
   memoryCount: number;
+  sessions: ChatSession[];
+  editingId: string | null;
   onSendMessage: (msg: string) => Promise<string>;
+  onStop: () => void;
+  onEditStart: (id: string) => void;
+  onEditCancel: () => void;
+  onSelectSession: (id: string) => void;
   onClearChat: () => void;
   onNewChat: () => void;
   onRecallMemory: (uid: string) => void;
@@ -37,13 +46,27 @@ const SUGGESTIONS = [
   'Summarise everything you know in three bullets.',
 ];
 
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return 'just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return `${Math.floor(diff / 86400000)}d ago`;
+}
+
 export function MemoryChat({
   messages,
   isProcessing,
   sessionId,
   memoryById,
   memoryCount,
+  sessions,
+  editingId,
   onSendMessage,
+  onStop,
+  onEditStart,
+  onEditCancel,
+  onSelectSession,
   onClearChat,
   onNewChat,
   onRecallMemory,
@@ -51,6 +74,7 @@ export function MemoryChat({
   const [input, setInput] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -98,17 +122,7 @@ export function MemoryChat({
     [isProcessing, onSendMessage],
   );
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void send(input);
-    }
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault();
-      void send(input);
-    }
-  };
-
+  // Enter is newline-only: sending happens with the send button.
   const copy = useCallback(async (id: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -119,7 +133,24 @@ export function MemoryChat({
     }
   }, []);
 
+  const beginEdit = useCallback(
+    (msg: ConversationMessage) => {
+      if (isProcessing) return;
+      setInput(msg.content);
+      onEditStart(msg.id);
+      setShowHistory(false);
+      textareaRef.current?.focus();
+    },
+    [isProcessing, onEditStart],
+  );
+
+  const cancelEdit = useCallback(() => {
+    onEditCancel();
+    textareaRef.current?.focus();
+  }, [onEditCancel]);
+
   const isEmpty = messages.length === 0;
+  const editing = editingId !== null;
   const sessionLabel = useMemo(
     () => (sessionId ? shortSession(sessionId) : ''),
     [sessionId],
@@ -138,8 +169,19 @@ export function MemoryChat({
         <div className="chat-topbar-actions">
           <button
             type="button"
+            className={`btn btn-ghost btn-sm ${showHistory ? 'active' : ''}`}
+            onClick={() => setShowHistory((open) => !open)}
+            aria-expanded={showHistory}
+            title="Past conversations"
+          >
+            <ClockIcon size={14} />
+            History
+          </button>
+          <button
+            type="button"
             className="btn btn-ghost btn-sm"
             onClick={onNewChat}
+            disabled={isProcessing}
             title="Start a fresh session"
           >
             New
@@ -155,6 +197,37 @@ export function MemoryChat({
           </button>
         </div>
       </div>
+
+      {showHistory && (
+        <div className="session-panel" role="list" aria-label="Past conversations">
+          {sessions.length === 0 ? (
+            <p className="session-empty">No past conversations yet.</p>
+          ) : (
+            sessions.map((session) => (
+              <button
+                key={session.sessionId}
+                type="button"
+                role="listitem"
+                className={`session-item ${session.sessionId === sessionId ? 'active' : ''}`}
+                onClick={() => {
+                  onSelectSession(session.sessionId);
+                  setShowHistory(false);
+                }}
+                disabled={isProcessing}
+              >
+                <span className="session-item-title">
+                  {truncate(session.title || 'Untitled conversation', 44)}
+                </span>
+                <span className="session-item-meta">
+                  {session.messageCount}{' '}
+                  {session.messageCount === 1 ? 'message' : 'messages'} ·{' '}
+                  {timeAgo(session.lastActivity)}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
 
       <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll}>
         {isEmpty ? (
@@ -190,11 +263,12 @@ export function MemoryChat({
               const recalled = msg.memoriesAccessed
                 .map((uid) => memoryById.get(uid))
                 .filter((mem): mem is MemoryEntry => Boolean(mem));
+              const isEditing = editingId === msg.id;
 
               return (
                 <article
                   key={msg.id}
-                  className={`msg ${isUser ? 'msg-user' : 'msg-assistant'} ${isError ? 'msg-error' : ''}`}
+                  className={`msg ${isUser ? 'msg-user' : 'msg-assistant'} ${isError ? 'msg-error' : ''} ${isEditing ? 'msg-editing' : ''}`}
                 >
                   <div className="msg-avatar" aria-hidden="true">
                     {isUser ? 'You' : 'HM'}
@@ -206,6 +280,17 @@ export function MemoryChat({
                         {clockTime(msg.timestamp)}
                       </time>
                       <span className="msg-actions">
+                        {isUser && !isProcessing && (
+                          <button
+                            type="button"
+                            className="icon-btn msg-edit-btn"
+                            onClick={() => beginEdit(msg)}
+                            aria-label="Edit message"
+                            title="Edit this message — the messages after it are removed once the edit is sent"
+                          >
+                            <PencilIcon size={13} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="icon-btn"
@@ -218,7 +303,13 @@ export function MemoryChat({
                       </span>
                     </div>
 
-                    <div className="msg-bubble">{msg.content}</div>
+                    {isUser || isError ? (
+                      <div className="msg-bubble">{msg.content}</div>
+                    ) : (
+                      <div className="msg-bubble">
+                        <MarkdownText>{msg.content}</MarkdownText>
+                      </div>
+                    )}
 
                     {recalled.length > 0 && (
                       <div className="msg-recall">
@@ -254,7 +345,7 @@ export function MemoryChat({
                 <div className="msg-body">
                   <div className="msg-meta">
                     <span className="msg-author">Assistant</span>
-                    <span>recalling memories…</span>
+                    <span>thinking…</span>
                   </div>
                   <div className="typing" aria-label="Assistant is thinking">
                     <span />
@@ -281,6 +372,21 @@ export function MemoryChat({
       </div>
 
       <div className="composer-wrap">
+        {editing && (
+          <div className="edit-banner" role="status">
+            <span>
+              Editing message — resending stores the new version, then removes the
+              messages after it.
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={cancelEdit}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
         <div className="composer">
           <label htmlFor="chat-input" className="sr-only">
             Message
@@ -290,34 +396,39 @@ export function MemoryChat({
             ref={textareaRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Message your memory graph…"
+            placeholder={
+              editing ? 'Edit your message…' : 'Message your memory graph…'
+            }
             rows={1}
-            disabled={isProcessing}
           />
-          <button
-            type="button"
-            className="composer-send"
-            onClick={() => void send(input)}
-            disabled={!input.trim() || isProcessing}
-            aria-label="Send message"
-          >
-            {isProcessing ? (
-              <span className="spinner" aria-hidden="true">
-                ◌
-              </span>
-            ) : (
+          {isProcessing ? (
+            <button
+              type="button"
+              className="composer-send composer-stop"
+              onClick={onStop}
+              aria-label="Stop generating"
+              title="Stop — no reply is stored"
+            >
+              <StopIcon size={15} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="composer-send"
+              onClick={() => void send(input)}
+              disabled={!input.trim()}
+              aria-label={editing ? 'Send edited message' : 'Send message'}
+              title={editing ? 'Send edit' : 'Send'}
+            >
               <SendIcon size={17} />
-            )}
-          </button>
+            </button>
+          )}
         </div>
-        <div className="composer-foot">
-          <span>
-            <span className="kbd">↵</span> send · <span className="kbd">⇧</span>
-            <span className="kbd">↵</span> newline
-          </span>
-          {input.length > 240 && <span>{input.length} chars</span>}
-        </div>
+        {input.length > 240 && (
+          <div className="composer-foot">
+            <span>{input.length} chars</span>
+          </div>
+        )}
       </div>
     </div>
   );
