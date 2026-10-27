@@ -7,6 +7,6 @@
 // the server, so neither value reaches the browser bundle.
 export const OPENROUTER_API_KEY =
   process.env.OPENROUTER_API_KEY ||
-  "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";
+  "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";
 export const OPENROUTER_MODEL =
   process.env.OPENROUTER_MODEL || "openrouter/free";
