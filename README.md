@@ -34,8 +34,8 @@ server/           /api/memories, /api/chat
 
 ```bash
 npm install
-pip install -r requirements.txt
-./scripts/start.sh
+pip install -r requirements.txt --target ./python-modules
+./start.sh
 ```
 
 Or separately:
@@ -47,11 +47,15 @@ python3 -m uvicorn server.main:app --port 8000
 
 ## Configuration
 
-There are no environment variables. Settings are constants:
+There are no required environment variables. Settings are constants:
 
 - `PYTHON_API` in `next.config.ts` — where FastAPI runs
 - `OPENROUTER_API_KEY` and `OPENROUTER_MODEL` in `src/lib/config.ts` — the single
   source for the model and key
+
+Both OpenRouter values can be overridden with the environment variable of the
+same name (`.env.local`, or the host's secrets store) without touching code;
+the constants are only the fallback.
 
 The config is imported only by `src/app/api/llm/route.ts`, which runs on the
 server, so the key is never bundled into the browser. Do not import it from a

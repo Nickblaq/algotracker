@@ -8,7 +8,10 @@ const PYTHON_API = 'http://127.0.0.1:8000';
 
 const nextConfig: NextConfig = {
   // Hosts allowed to load dev assets (the cloud preview origin). Dev-only.
-  allowedDevOrigins: ['pv-6fb8957dae36-b5706805-f4e5-43f1-893a-b16d2f4c984d.style.dev'],
+  allowedDevOrigins: [
+    'pv-777b3d2b2888-94bbd441-3e40-41a9-a637-3aecf2ed67dd.style.dev',
+    'pv-6fb8957dae36-b5706805-f4e5-43f1-893a-b16d2f4c984d.style.dev',
+  ],
 
   // Keep the dev overlay out of the app's own UI.
   devIndicators: false,

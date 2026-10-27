@@ -531,11 +531,16 @@ class MemoryManager:
         Both writes happen together, so a completed turn is atomic: either the
         reply and its weight boosts land, or neither does.
         """
+        # The turn's recalled memories belong to this reply too: storing them
+        # on the assistant message is what lets the UI show which memories a
+        # reply actually used.
+        memories_used: list[str] = []
         if reinforce:
             last_user = await self.last_user_message(session_id)
             if last_user is not None:
+                memories_used = list(last_user.memories_accessed)
                 await self.reinforce_memories(
-                    last_user.content, last_user.memories_accessed
+                    last_user.content, memories_used
                 )
 
         tags = ["assistant-response"]
@@ -554,7 +559,7 @@ class MemoryManager:
             role="assistant",
             content=content,
             timestamp=_utcnow(),
-            memories_accessed_json="[]",
+            memories_accessed_json=json.dumps(memories_used),
             memories_created_json=json.dumps([mem.uid]),
         )
         self.session.add(msg)

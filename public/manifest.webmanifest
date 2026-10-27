@@ -1,7 +1,7 @@
 {
   "name": "Hierarchical Memory for LLMs",
   "short_name": "HMM",
-  "description": "A five-tier memory system for LLMs",
+  "description": "A weighted graph memory system for LLMs",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

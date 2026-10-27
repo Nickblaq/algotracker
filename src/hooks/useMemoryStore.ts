@@ -157,9 +157,14 @@ export function useMemoryStore() {
   }, []);
 
   const refreshMessages = useCallback(async () => {
-    if (!sessionIdRef.current) return;
+    // Fall back to the persisted session so a reload restores the thread
+    // instead of rendering an empty conversation: the ref starts empty and is
+    // only filled in by an explicit send/open/new-chat.
+    const id = sessionIdRef.current || currentSession();
+    if (!id) return;
+    sessionIdRef.current = id;
     try {
-      const res = await api.chat.history(sessionIdRef.current, 50);
+      const res = await api.chat.history(id, 50);
       setMessages(res);
     } catch {
       /* ignore */
